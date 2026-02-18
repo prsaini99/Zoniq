@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
@@ -11,7 +12,6 @@ import {
   Settings,
   LayoutDashboard,
   Ticket,
-  Search,
   Heart,
   ChevronDown,
 } from "lucide-react";
@@ -39,14 +39,11 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-lg">
+    <header className="sticky top-0 z-50 w-full glass-strong">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <span className="text-lg font-bold text-white">Z</span>
-          </div>
-          <span className="text-xl font-bold text-foreground">ZONIQ</span>
+        <Link href="/" className="flex items-center group">
+          <Image src="/zoniq-logo.png" alt="ZONIQ" width={120} height={40} className="h-8 w-auto transition-transform duration-300 group-hover:scale-105" priority />
         </Link>
 
         {/* Desktop Navigation */}
@@ -56,106 +53,108 @@ export function Header() {
               key={link.href}
               href={link.href}
               className={cn(
-                "px-4 py-2 text-sm font-medium rounded-lg transition-colors",
+                "relative px-4 py-2 text-sm font-medium rounded-lg transition-all duration-300",
                 pathname === link.href
-                  ? "text-primary bg-primary-light"
-                  : "text-foreground-muted hover:text-foreground hover:bg-background-soft"
+                  ? "text-foreground"
+                  : "text-foreground-muted hover:text-foreground"
               )}
             >
               {link.label}
+              {pathname === link.href && (
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-primary rounded-full" />
+              )}
             </Link>
           ))}
         </nav>
 
         {/* Desktop Actions */}
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-3">
           {isAuthenticated ? (
             <>
               {/* Admin Quick Actions */}
               {isAdmin && (
-                <div className="flex items-center gap-1 mr-2">
-                  <Link
-                    href="/admin"
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-                      pathname.startsWith("/admin")
-                        ? "bg-primary text-white"
-                        : "bg-primary/10 text-primary hover:bg-primary/20"
-                    )}
-                    title="Admin Dashboard"
-                  >
-                    <LayoutDashboard className="h-4 w-4" />
-                    <span className="hidden lg:inline">Admin</span>
-                  </Link>
-                </div>
+                <Link
+                  href="/admin"
+                  className={cn(
+                    "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-all duration-300",
+                    pathname.startsWith("/admin")
+                      ? "bg-primary text-white shadow-glow-sm"
+                      : "bg-primary/10 text-primary hover:bg-primary/20"
+                  )}
+                  title="Admin Dashboard"
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  <span className="hidden lg:inline">Admin</span>
+                </Link>
               )}
 
               {/* Quick Action Icons */}
-              <div className="flex items-center gap-1 mr-2">
+              <div className="flex items-center gap-0.5">
                 <Link
                   href="/my-tickets"
                   className={cn(
-                    "p-2 rounded-lg transition-colors",
+                    "p-2.5 rounded-lg transition-all duration-300",
                     pathname === "/my-tickets"
-                      ? "text-primary bg-primary-light"
-                      : "text-foreground-muted hover:text-foreground hover:bg-background-soft"
+                      ? "text-primary bg-primary/10"
+                      : "text-foreground-subtle hover:text-foreground hover:bg-foreground/5"
                   )}
                   title="My Tickets"
                 >
-                  <Ticket className="h-5 w-5" />
+                  <Ticket className="h-[18px] w-[18px]" />
                 </Link>
                 <Link
                   href="/wishlist"
                   className={cn(
-                    "p-2 rounded-lg transition-colors",
+                    "p-2.5 rounded-lg transition-all duration-300",
                     pathname === "/wishlist"
-                      ? "text-primary bg-primary-light"
-                      : "text-foreground-muted hover:text-foreground hover:bg-background-soft"
+                      ? "text-primary bg-primary/10"
+                      : "text-foreground-subtle hover:text-foreground hover:bg-foreground/5"
                   )}
                   title="Wishlist"
                 >
-                  <Heart className="h-5 w-5" />
+                  <Heart className="h-[18px] w-[18px]" />
                 </Link>
               </div>
 
               {/* Divider */}
-              <div className="h-8 w-px bg-border" />
+              <div className="h-6 w-px bg-border" />
 
               {/* Profile Dropdown */}
-              <div className="relative ml-2">
+              <div className="relative">
                 <button
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
                   className={cn(
-                    "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium transition-colors",
+                    "flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-sm font-medium transition-all duration-300",
                     isProfileOpen
-                      ? "bg-background-soft text-foreground"
-                      : "text-foreground-muted hover:text-foreground hover:bg-background-soft"
+                      ? "bg-foreground/5"
+                      : "hover:bg-foreground/5"
                   )}
                 >
                   <div className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-full font-semibold",
-                    isAdmin ? "bg-amber-500 text-white" : "bg-primary text-white"
+                    "flex h-8 w-8 items-center justify-center rounded-lg font-bold text-sm",
+                    isAdmin
+                      ? "bg-gradient-to-br from-amber-500 to-amber-600 text-white"
+                      : "bg-gradient-to-br from-primary to-primary-hover text-white"
                   )}>
                     {user?.fullName?.[0]?.toUpperCase() ||
                       user?.username?.[0]?.toUpperCase() ||
                       "U"}
                   </div>
                   <div className="hidden lg:block text-left">
-                    <p className="text-sm font-medium text-foreground leading-tight">
+                    <p className="text-sm font-semibold text-foreground leading-tight">
                       {user?.fullName || user?.username}
                     </p>
                     {isAdmin ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">
-                        <LayoutDashboard className="h-2.5 w-2.5" />
-                        ADMIN
+                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">
+                        Admin
                       </span>
                     ) : (
-                      <p className="text-xs text-foreground-muted leading-tight">Customer</p>
+                      <p className="text-[11px] text-foreground-muted leading-tight">Customer</p>
                     )}
                   </div>
                   <ChevronDown
                     className={cn(
-                      "h-4 w-4 transition-transform",
+                      "h-3.5 w-3.5 text-foreground-subtle transition-transform duration-300",
                       isProfileOpen && "rotate-180"
                     )}
                   />
@@ -168,16 +167,15 @@ export function Header() {
                       className="fixed inset-0 z-10"
                       onClick={() => setIsProfileOpen(false)}
                     />
-                    <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-border bg-background-card py-2 shadow-xl z-20">
+                    <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-border bg-background-card py-1.5 shadow-card-hover z-20 animate-scale-in origin-top-right">
                       {/* User Info */}
-                      <div className={cn(
-                        "px-4 py-3 border-b border-border",
-                        isAdmin && "bg-amber-50"
-                      )}>
+                      <div className="px-4 py-3 border-b border-border">
                         <div className="flex items-center gap-3">
                           <div className={cn(
-                            "flex h-10 w-10 items-center justify-center rounded-full font-semibold",
-                            isAdmin ? "bg-amber-500 text-white" : "bg-primary text-white"
+                            "flex h-10 w-10 items-center justify-center rounded-lg font-bold",
+                            isAdmin
+                              ? "bg-gradient-to-br from-amber-500 to-amber-600 text-white"
+                              : "bg-gradient-to-br from-primary to-primary-hover text-white"
                           )}>
                             {user?.fullName?.[0]?.toUpperCase() ||
                               user?.username?.[0]?.toUpperCase() ||
@@ -189,8 +187,8 @@ export function Header() {
                                 {user?.fullName || user?.username}
                               </p>
                               {isAdmin && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">
-                                  ADMIN
+                                <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                  Admin
                                 </span>
                               )}
                             </div>
@@ -202,67 +200,36 @@ export function Header() {
                       </div>
 
                       {/* Menu Items */}
-                      <div className="py-2">
-                        <Link
-                          href="/profile"
-                          className={cn(
-                            "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors",
-                            pathname === "/profile"
-                              ? "text-primary bg-primary-light"
-                              : "text-foreground-muted hover:text-foreground hover:bg-background-soft"
-                          )}
-                          onClick={() => setIsProfileOpen(false)}
-                        >
-                          <User className="h-4 w-4" />
-                          My Profile
-                        </Link>
-                        <Link
-                          href="/my-tickets"
-                          className={cn(
-                            "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors",
-                            pathname === "/my-tickets"
-                              ? "text-primary bg-primary-light"
-                              : "text-foreground-muted hover:text-foreground hover:bg-background-soft"
-                          )}
-                          onClick={() => setIsProfileOpen(false)}
-                        >
-                          <Ticket className="h-4 w-4" />
-                          My Tickets
-                        </Link>
-                        <Link
-                          href="/wishlist"
-                          className={cn(
-                            "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors",
-                            pathname === "/wishlist"
-                              ? "text-primary bg-primary-light"
-                              : "text-foreground-muted hover:text-foreground hover:bg-background-soft"
-                          )}
-                          onClick={() => setIsProfileOpen(false)}
-                        >
-                          <Heart className="h-4 w-4" />
-                          Wishlist
-                        </Link>
-                        <Link
-                          href="/settings"
-                          className={cn(
-                            "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors",
-                            pathname === "/settings"
-                              ? "text-primary bg-primary-light"
-                              : "text-foreground-muted hover:text-foreground hover:bg-background-soft"
-                          )}
-                          onClick={() => setIsProfileOpen(false)}
-                        >
-                          <Settings className="h-4 w-4" />
-                          Settings
-                        </Link>
+                      <div className="py-1">
+                        {[
+                          { href: "/profile", icon: User, label: "My Profile" },
+                          { href: "/my-tickets", icon: Ticket, label: "My Tickets" },
+                          { href: "/wishlist", icon: Heart, label: "Wishlist" },
+                          { href: "/settings", icon: Settings, label: "Settings" },
+                        ].map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className={cn(
+                              "flex items-center gap-3 px-4 py-2.5 text-sm transition-all duration-200",
+                              pathname === item.href
+                                ? "text-primary bg-primary/5"
+                                : "text-foreground-muted hover:text-foreground hover:bg-foreground/5"
+                            )}
+                            onClick={() => setIsProfileOpen(false)}
+                          >
+                            <item.icon className="h-4 w-4" />
+                            {item.label}
+                          </Link>
+                        ))}
                       </div>
 
                       {/* Admin Section */}
                       {isAdmin && (
-                        <div className="border-t border-border py-2">
+                        <div className="border-t border-border py-1">
                           <Link
                             href="/admin"
-                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-primary hover:bg-primary-light transition-colors"
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-amber-400 hover:bg-amber-400/5 transition-all duration-200"
                             onClick={() => setIsProfileOpen(false)}
                           >
                             <LayoutDashboard className="h-4 w-4" />
@@ -272,10 +239,10 @@ export function Header() {
                       )}
 
                       {/* Logout */}
-                      <div className="border-t border-border py-2">
+                      <div className="border-t border-border py-1">
                         <button
                           onClick={handleLogout}
-                          className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-error hover:bg-error/10 transition-colors"
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-error hover:bg-error/5 transition-all duration-200"
                         >
                           <LogOut className="h-4 w-4" />
                           Sign Out
@@ -289,7 +256,7 @@ export function Header() {
           ) : (
             <div className="flex items-center gap-2">
               <Link href="/login">
-                <Button variant="ghost">Sign In</Button>
+                <Button variant="ghost" className="text-foreground-muted">Sign In</Button>
               </Link>
               <Link href="/signup">
                 <Button>Get Started</Button>
@@ -301,25 +268,29 @@ export function Header() {
         {/* Mobile Menu Button */}
         <button
           onClick={() => setIsMenuOpen(!isMenuOpen)}
-          className="md:hidden p-2 rounded-lg text-foreground-muted hover:text-foreground hover:bg-background-soft"
+          className="md:hidden p-2 rounded-lg text-foreground-muted hover:text-foreground hover:bg-foreground/5 transition-all duration-200"
         >
-          {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
 
       {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="md:hidden border-t border-border bg-background">
+        <div className="md:hidden border-t border-border/50 bg-background-soft animate-fade-in">
           <nav className="container mx-auto px-4 py-4 space-y-1">
             {/* User Info (if authenticated) */}
             {isAuthenticated && (
               <div className={cn(
-                "flex items-center gap-3 px-4 py-3 mb-3 rounded-lg",
-                isAdmin ? "bg-amber-50 border border-amber-200" : "bg-background-soft"
+                "flex items-center gap-3 px-4 py-3 mb-3 rounded-xl",
+                isAdmin
+                  ? "bg-amber-400/5 border border-amber-400/10"
+                  : "bg-foreground/5"
               )}>
                 <div className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-full font-semibold",
-                  isAdmin ? "bg-amber-500 text-white" : "bg-primary text-white"
+                  "flex h-10 w-10 items-center justify-center rounded-lg font-bold",
+                  isAdmin
+                    ? "bg-gradient-to-br from-amber-500 to-amber-600 text-white"
+                    : "bg-gradient-to-br from-primary to-primary-hover text-white"
                 )}>
                   {user?.fullName?.[0]?.toUpperCase() ||
                     user?.username?.[0]?.toUpperCase() ||
@@ -331,8 +302,8 @@ export function Header() {
                       {user?.fullName || user?.username}
                     </p>
                     {isAdmin && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">
-                        ADMIN
+                      <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                        Admin
                       </span>
                     )}
                   </div>
@@ -350,10 +321,10 @@ export function Header() {
                 href={link.href}
                 onClick={() => setIsMenuOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors",
+                  "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200",
                   pathname === link.href
-                    ? "text-primary bg-primary-light"
-                    : "text-foreground-muted hover:text-foreground hover:bg-background-soft"
+                    ? "text-primary bg-primary/5"
+                    : "text-foreground-muted hover:text-foreground hover:bg-foreground/5"
                 )}
               >
                 {link.label}
@@ -363,70 +334,39 @@ export function Header() {
             {/* Authenticated User Menu */}
             {isAuthenticated && (
               <>
-                <div className="my-3 border-t border-border" />
-                <Link
-                  href="/profile"
-                  onClick={() => setIsMenuOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors",
-                    pathname === "/profile"
-                      ? "text-primary bg-primary-light"
-                      : "text-foreground-muted hover:text-foreground hover:bg-background-soft"
-                  )}
-                >
-                  <User className="h-4 w-4" />
-                  My Profile
-                </Link>
-                <Link
-                  href="/my-tickets"
-                  onClick={() => setIsMenuOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors",
-                    pathname === "/my-tickets"
-                      ? "text-primary bg-primary-light"
-                      : "text-foreground-muted hover:text-foreground hover:bg-background-soft"
-                  )}
-                >
-                  <Ticket className="h-4 w-4" />
-                  My Tickets
-                </Link>
-                <Link
-                  href="/wishlist"
-                  onClick={() => setIsMenuOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors",
-                    pathname === "/wishlist"
-                      ? "text-primary bg-primary-light"
-                      : "text-foreground-muted hover:text-foreground hover:bg-background-soft"
-                  )}
-                >
-                  <Heart className="h-4 w-4" />
-                  Wishlist
-                </Link>
-                <Link
-                  href="/settings"
-                  onClick={() => setIsMenuOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors",
-                    pathname === "/settings"
-                      ? "text-primary bg-primary-light"
-                      : "text-foreground-muted hover:text-foreground hover:bg-background-soft"
-                  )}
-                >
-                  <Settings className="h-4 w-4" />
-                  Settings
-                </Link>
+                <div className="my-3 border-t border-border/50" />
+                {[
+                  { href: "/profile", icon: User, label: "My Profile" },
+                  { href: "/my-tickets", icon: Ticket, label: "My Tickets" },
+                  { href: "/wishlist", icon: Heart, label: "Wishlist" },
+                  { href: "/settings", icon: Settings, label: "Settings" },
+                ].map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setIsMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200",
+                      pathname === item.href
+                        ? "text-primary bg-primary/5"
+                        : "text-foreground-muted hover:text-foreground hover:bg-foreground/5"
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </Link>
+                ))}
 
                 {isAdmin && (
                   <>
-                    <div className="my-3 border-t border-border" />
+                    <div className="my-3 border-t border-border/50" />
                     <div className="px-4 py-2">
-                      <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2">Admin Controls</p>
+                      <p className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Admin</p>
                     </div>
                     <Link
                       href="/admin"
                       onClick={() => setIsMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors mx-2"
+                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-amber-400 bg-amber-400/5 hover:bg-amber-400/10 rounded-lg transition-all duration-200"
                     >
                       <LayoutDashboard className="h-4 w-4" />
                       Admin Dashboard
@@ -434,13 +374,13 @@ export function Header() {
                   </>
                 )}
 
-                <div className="my-3 border-t border-border" />
+                <div className="my-3 border-t border-border/50" />
                 <button
                   onClick={() => {
                     handleLogout();
                     setIsMenuOpen(false);
                   }}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-medium text-error hover:bg-error/10 rounded-lg transition-colors"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-medium text-error hover:bg-error/5 rounded-lg transition-all duration-200"
                 >
                   <LogOut className="h-4 w-4" />
                   Sign Out
@@ -450,7 +390,7 @@ export function Header() {
 
             {/* Guest User Menu */}
             {!isAuthenticated && (
-              <div className="pt-4 border-t border-border space-y-2">
+              <div className="pt-4 border-t border-border/50 space-y-2">
                 <Link href="/login" onClick={() => setIsMenuOpen(false)}>
                   <Button variant="outline" className="w-full">
                     Sign In

@@ -175,15 +175,15 @@ export default function SignupPage() {
   const passwordStrength = getPasswordStrength();
 
   return (
-    <Card className="border-border">
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl">Create an account</CardTitle>
+    <Card className="border-border/50 shadow-card-hover">
+      <CardHeader className="text-center pb-2">
+        <CardTitle className="text-2xl tracking-tight">Create an account</CardTitle>
         <CardDescription>Join ZONIQ to book tickets for amazing events</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-error text-sm">
+            <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-error/5 border border-error/10 text-error text-sm">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
             </div>
@@ -401,9 +401,9 @@ export default function SignupPage() {
             Create Account
           </Button>
 
-          <div className="text-center text-sm text-foreground-muted">
+          <div className="text-center text-sm text-foreground-muted pt-2 border-t border-border/50">
             Already have an account?{" "}
-            <Link href="/login" className="text-primary hover:underline font-medium">
+            <Link href="/login" className="text-primary hover:underline font-semibold">
               Sign in
             </Link>
           </div>

@@ -6,29 +6,29 @@ import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 cursor-pointer",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold tracking-tight transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 cursor-pointer active:scale-[0.97]",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-white hover:bg-primary-hover shadow-md hover:shadow-lg",
+          "bg-primary text-white hover:bg-primary-hover shadow-glow-sm hover:shadow-glow",
         secondary:
-          "bg-background-elevated text-foreground border border-border hover:bg-background-soft hover:border-border-hover",
+          "bg-background-elevated text-foreground border border-border hover:border-border-hover hover:bg-background-soft",
         outline:
-          "border-2 border-primary text-primary bg-transparent hover:bg-primary hover:text-white",
+          "border border-border text-foreground bg-transparent hover:bg-foreground/5 hover:border-foreground/20",
         ghost:
-          "text-foreground-muted hover:text-foreground hover:bg-background-soft",
+          "text-foreground-muted hover:text-foreground hover:bg-foreground/5",
         link: "text-primary underline-offset-4 hover:underline",
         destructive:
-          "bg-error text-white hover:opacity-90 shadow-md",
+          "bg-error text-white hover:bg-error/90 shadow-md",
         success:
-          "bg-success text-white hover:opacity-90 shadow-md",
+          "bg-success text-white hover:bg-success/90 shadow-md",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 px-3 text-xs",
-        lg: "h-12 px-6 text-base",
-        xl: "h-14 px-8 text-lg",
+        default: "h-10 px-5 py-2",
+        sm: "h-9 px-3.5 text-xs",
+        lg: "h-12 px-7 text-base",
+        xl: "h-14 px-9 text-lg rounded-2xl",
         icon: "h-10 w-10",
       },
     },

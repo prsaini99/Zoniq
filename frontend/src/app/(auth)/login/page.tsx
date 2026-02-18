@@ -154,21 +154,21 @@ function LoginContent() {
   };
 
   return (
-    <Card className="border-border">
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl">Welcome to ZONIQ</CardTitle>
-        <CardDescription>Sign in or create your account instantly</CardDescription>
+    <Card className="border-border/50 shadow-card-hover">
+      <CardHeader className="text-center pb-2">
+        <CardTitle className="text-2xl tracking-tight">Welcome back</CardTitle>
+        <CardDescription>Sign in to your ZONIQ account</CardDescription>
       </CardHeader>
       <CardContent>
         {/* Login mode tabs */}
-        <div className="flex mb-6 border border-border rounded-lg overflow-hidden">
+        <div className="flex mb-6 p-1 bg-background-elevated rounded-xl">
           <button
             type="button"
             onClick={() => switchMode("email-otp")}
-            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+            className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
               loginMode === "email-otp"
-                ? "bg-primary text-primary-foreground"
-                : "bg-background text-foreground-muted hover:text-foreground"
+                ? "bg-primary text-white shadow-glow-sm"
+                : "text-foreground-muted hover:text-foreground"
             }`}
           >
             Email
@@ -176,10 +176,10 @@ function LoginContent() {
           <button
             type="button"
             onClick={() => switchMode("password")}
-            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+            className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
               loginMode === "password"
-                ? "bg-primary text-primary-foreground"
-                : "bg-background text-foreground-muted hover:text-foreground"
+                ? "bg-primary text-white shadow-glow-sm"
+                : "text-foreground-muted hover:text-foreground"
             }`}
           >
             Password
@@ -187,7 +187,7 @@ function LoginContent() {
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 text-error text-sm mb-4">
+          <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-error/5 border border-error/10 text-error text-sm mb-5">
             <AlertCircle className="h-4 w-4 flex-shrink-0" />
             <span>{error}</span>
           </div>
@@ -226,7 +226,7 @@ function LoginContent() {
                       size="sm"
                       onClick={handleSendEmailOTP}
                       disabled={emailOtpLoading || !emailForOtp.trim()}
-                      className="whitespace-nowrap h-10"
+                      className="whitespace-nowrap h-11"
                     >
                       {emailOtpLoading ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -244,7 +244,7 @@ function LoginContent() {
                         setEmailOtpCode("");
                         setEmailOtpError("");
                       }}
-                      className="whitespace-nowrap h-10 text-foreground-muted"
+                      className="whitespace-nowrap h-11 text-foreground-muted"
                     >
                       Change
                     </Button>
@@ -254,7 +254,7 @@ function LoginContent() {
             </div>
 
             {emailOtpSent && (
-              <div className="space-y-3">
+              <div className="space-y-4 animate-fade-in">
                 <Input
                   label="Verification Code"
                   name="emailOtpCode"
@@ -265,12 +265,12 @@ function LoginContent() {
                     setEmailOtpError("");
                   }}
                   maxLength={6}
-                  className="text-center tracking-widest text-lg"
+                  className="text-center tracking-[0.3em] text-lg font-mono"
                   autoFocus
                 />
 
                 {emailOtpError && (
-                  <p className="text-xs text-error">{emailOtpError}</p>
+                  <p className="text-xs text-error font-medium">{emailOtpError}</p>
                 )}
 
                 <div className="flex items-center justify-between">
@@ -278,7 +278,7 @@ function LoginContent() {
                     type="button"
                     onClick={handleResendEmailOTP}
                     disabled={emailOtpLoading || emailResendCountdown > 0}
-                    className="text-sm text-primary hover:underline disabled:text-foreground-muted disabled:no-underline"
+                    className="text-sm text-primary hover:underline disabled:text-foreground-subtle disabled:no-underline transition-colors"
                   >
                     {emailResendCountdown > 0
                       ? `Resend code in ${emailResendCountdown}s`
@@ -299,7 +299,7 @@ function LoginContent() {
             )}
 
             {!emailOtpSent && (
-              <p className="text-xs text-foreground-muted text-center">
+              <p className="text-xs text-foreground-subtle text-center leading-relaxed">
                 We&apos;ll send a verification code to your email. No password needed — new users are automatically registered.
               </p>
             )}
@@ -359,9 +359,9 @@ function LoginContent() {
           </form>
         )}
 
-        <div className="text-center text-sm text-foreground-muted mt-4">
+        <div className="text-center text-sm text-foreground-muted mt-6 pt-6 border-t border-border/50">
           Want to create an account with a password?{" "}
-          <Link href="/signup" className="text-primary hover:underline font-medium">
+          <Link href="/signup" className="text-primary hover:underline font-semibold">
             Sign up
           </Link>
         </div>

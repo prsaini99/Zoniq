@@ -126,20 +126,20 @@ function EventsContent() {
   const hasActiveFilters = searchQuery || selectedCategory || selectedCity;
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-10">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
+      <div className="mb-10">
+        <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-3 tracking-tight">
           Discover Events
         </h1>
-        <p className="text-foreground-muted">
+        <p className="text-foreground-muted text-lg">
           Find and book tickets for amazing events near you
         </p>
       </div>
 
       {/* Search & Filters */}
       <div className="mb-8 space-y-4">
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <Input
               placeholder="Search events..."
@@ -155,20 +155,20 @@ function EventsContent() {
           >
             Filters
             {hasActiveFilters && (
-              <span className="ml-1 h-2 w-2 rounded-full bg-primary" />
+              <span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
             )}
           </Button>
         </div>
 
         {/* Filters Panel */}
         {showFilters && (
-          <div className="p-4 rounded-lg border border-border bg-background-card space-y-4 animate-fade-in">
+          <div className="p-5 rounded-xl border border-border bg-background-card space-y-5 animate-scale-in">
             <div className="flex items-center justify-between">
-              <h3 className="font-medium text-foreground">Filters</h3>
+              <h3 className="font-semibold text-foreground text-sm">Filters</h3>
               {hasActiveFilters && (
                 <button
                   onClick={clearFilters}
-                  className="text-sm text-primary hover:underline"
+                  className="text-xs font-medium text-primary hover:underline"
                 >
                   Clear all
                 </button>
@@ -177,7 +177,7 @@ function EventsContent() {
 
             {/* City Filter */}
             <div>
-              <label className="block text-sm text-foreground-muted mb-2">
+              <label className="block text-xs font-medium text-foreground-subtle mb-2 uppercase tracking-wider">
                 City
               </label>
               <Input
@@ -190,16 +190,16 @@ function EventsContent() {
 
             {/* Categories */}
             <div>
-              <label className="block text-sm text-foreground-muted mb-2">
+              <label className="block text-xs font-medium text-foreground-subtle mb-3 uppercase tracking-wider">
                 Categories
               </label>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => handleCategorySelect(null)}
-                  className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${
                     !selectedCategory
-                      ? "bg-primary text-white"
-                      : "bg-background-elevated text-foreground-muted hover:text-foreground"
+                      ? "bg-primary text-white shadow-glow-sm"
+                      : "bg-background-elevated text-foreground-muted hover:text-foreground border border-border"
                   }`}
                 >
                   All
@@ -208,10 +208,10 @@ function EventsContent() {
                   <button
                     key={category.value}
                     onClick={() => handleCategorySelect(category.value)}
-                    className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
+                    className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 ${
                       selectedCategory === category.value
-                        ? "bg-primary text-white"
-                        : "bg-background-elevated text-foreground-muted hover:text-foreground"
+                        ? "bg-primary text-white shadow-glow-sm"
+                        : "bg-background-elevated text-foreground-muted hover:text-foreground border border-border"
                     }`}
                   >
                     {category.label}
@@ -225,37 +225,37 @@ function EventsContent() {
         {/* Active Filters */}
         {hasActiveFilters && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-foreground-muted">
-              Active filters:
+            <span className="text-xs text-foreground-subtle font-medium uppercase tracking-wider">
+              Active:
             </span>
             {searchQuery && (
-              <Badge variant="secondary" className="gap-1">
+              <Badge variant="secondary" className="gap-1.5">
                 Search: {searchQuery}
                 <button
                   onClick={() => setSearchQuery("")}
-                  className="hover:text-foreground"
+                  className="hover:text-foreground transition-colors"
                 >
                   <X className="h-3 w-3" />
                 </button>
               </Badge>
             )}
             {selectedCategory && (
-              <Badge variant="secondary" className="gap-1">
+              <Badge variant="secondary" className="gap-1.5">
                 {CATEGORY_LABELS[selectedCategory as EventCategory]}
                 <button
                   onClick={() => setSelectedCategory(null)}
-                  className="hover:text-foreground"
+                  className="hover:text-foreground transition-colors"
                 >
                   <X className="h-3 w-3" />
                 </button>
               </Badge>
             )}
             {selectedCity && (
-              <Badge variant="secondary" className="gap-1">
+              <Badge variant="secondary" className="gap-1.5">
                 City: {selectedCity}
                 <button
                   onClick={() => setSelectedCity("")}
-                  className="hover:text-foreground"
+                  className="hover:text-foreground transition-colors"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -265,8 +265,8 @@ function EventsContent() {
         )}
       </div>
 
-      {/* Results */}
-      <div className="mb-4 text-sm text-foreground-muted">
+      {/* Results count */}
+      <div className="mb-6 text-xs text-foreground-subtle font-medium uppercase tracking-wider">
         {!isLoading && (
           <span>
             Showing {events.length} of {total} events
@@ -291,7 +291,7 @@ function EventsContent() {
 
           {/* Load More */}
           {hasMore && (
-            <div className="flex justify-center mt-8">
+            <div className="flex justify-center mt-12">
               <Button
                 variant="outline"
                 onClick={handleLoadMore}
@@ -303,12 +303,14 @@ function EventsContent() {
           )}
         </>
       ) : (
-        <div className="text-center py-16">
-          <Calendar className="h-16 w-16 text-foreground-muted mx-auto mb-4" />
-          <h3 className="text-xl font-medium text-foreground mb-2">
+        <div className="text-center py-20">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-foreground/5 mb-6">
+            <Calendar className="h-7 w-7 text-foreground-subtle" />
+          </div>
+          <h3 className="text-xl font-semibold text-foreground mb-2">
             No events found
           </h3>
-          <p className="text-foreground-muted mb-6">
+          <p className="text-foreground-muted mb-8 max-w-sm mx-auto">
             {hasActiveFilters
               ? "Try adjusting your filters to find more events"
               : "Check back later for new events"}

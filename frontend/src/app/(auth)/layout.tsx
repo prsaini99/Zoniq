@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useIsAuthenticated } from "@/store/auth";
@@ -24,29 +25,30 @@ export default function AuthLayout({
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-background relative overflow-hidden">
+      {/* Atmospheric background elements */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/[0.04] rounded-full blur-[120px] -translate-y-1/2 translate-x-1/4" />
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-accent/[0.03] rounded-full blur-[100px] translate-y-1/2 -translate-x-1/4" />
+      </div>
+
       {/* Header */}
-      <header className="border-b border-border bg-background">
+      <header className="relative z-10 border-b border-border/30">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <span className="text-lg font-bold text-white">Z</span>
-            </div>
-            <span className="text-xl font-bold text-foreground">
-              ZONIQ
-            </span>
+          <Link href="/" className="flex items-center group">
+            <Image src="/zoniq-logo.png" alt="ZONIQ" width={120} height={40} className="h-8 w-auto transition-transform duration-300 group-hover:scale-105" priority />
           </Link>
         </div>
       </header>
 
       {/* Content */}
-      <main className="flex-1 flex items-center justify-center p-4">
+      <main className="relative z-10 flex-1 flex items-center justify-center p-4 py-12">
         <div className="w-full max-w-md">{children}</div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border py-4">
-        <div className="container mx-auto px-4 text-center text-sm text-foreground-muted">
+      <footer className="relative z-10 border-t border-border/30 py-4">
+        <div className="container mx-auto px-4 text-center text-xs text-foreground-subtle">
           &copy; {new Date().getFullYear()} ZONIQ. All rights reserved.
         </div>
       </footer>
