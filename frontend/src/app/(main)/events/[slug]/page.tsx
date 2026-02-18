@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -27,7 +27,7 @@ import type { EventDetail, SeatCategory, EventSeatsResponse, QueueStatusResponse
 import { CATEGORY_LABELS } from "@/types";
 import { useIsAuthenticated } from "@/store/auth";
 
-export default function EventDetailPage() {
+function EventDetailContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -444,5 +444,13 @@ export default function EventDetailPage() {
         maxTicketsPerBooking={event.maxTicketsPerBooking}
       />
     </div>
+  );
+}
+
+export default function EventDetailPage() {
+  return (
+    <Suspense>
+      <EventDetailContent />
+    </Suspense>
   );
 }

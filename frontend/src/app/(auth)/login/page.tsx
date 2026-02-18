@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Mail, User, Lock, AlertCircle, Loader2 } from "lucide-react";
@@ -12,7 +12,7 @@ import { emailOtpApi } from "@/lib/api";
 
 type LoginMode = "email-otp" | "password";
 
-export default function LoginPage() {
+function LoginContent() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect");
   const { login, loginWithEmailOTP, isLoading, error, clearError } = useAuthStore();
@@ -367,5 +367,13 @@ export default function LoginPage() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginContent />
+    </Suspense>
   );
 }
