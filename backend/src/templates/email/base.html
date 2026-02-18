@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ app_name }}{% endblock %}</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .email-container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 32px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            padding-bottom: 24px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 24px;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #6366f1;
+            text-decoration: none;
+        }
+        .content {
+            padding: 16px 0;
+        }
+        h1 {
+            color: #1f2937;
+            font-size: 24px;
+            margin-bottom: 16px;
+        }
+        h2 {
+            color: #374151;
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+        p {
+            color: #4b5563;
+            margin-bottom: 16px;
+        }
+        .highlight-box {
+            background-color: #f3f4f6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .highlight-box .label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .highlight-box .value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        .button {
+            display: inline-block;
+            background-color: #6366f1;
+            color: #ffffff !important;
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 500;
+            margin: 16px 0;
+        }
+        .button:hover {
+            background-color: #4f46e5;
+        }
+        .button-secondary {
+            background-color: #e5e7eb;
+            color: #374151 !important;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 20px 0;
+        }
+        .info-item {
+            padding: 12px;
+            background-color: #f9fafb;
+            border-radius: 6px;
+        }
+        .info-item .label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+        .info-item .value {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1f2937;
+        }
+        .ticket-list {
+            margin: 20px 0;
+        }
+        .ticket-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .ticket-item:last-child {
+            border-bottom: none;
+        }
+        .success-badge {
+            display: inline-block;
+            background-color: #d1fae5;
+            color: #065f46;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .warning-badge {
+            display: inline-block;
+            background-color: #fef3c7;
+            color: #92400e;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .error-badge {
+            display: inline-block;
+            background-color: #fee2e2;
+            color: #991b1b;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .footer {
+            text-align: center;
+            padding-top: 24px;
+            border-top: 1px solid #eee;
+            margin-top: 24px;
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .footer a {
+            color: #6366f1;
+            text-decoration: none;
+        }
+        .divider {
+            height: 1px;
+            background-color: #e5e7eb;
+            margin: 24px 0;
+        }
+        @media only screen and (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            .email-container {
+                padding: 20px;
+            }
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <a href="#" class="logo">{{ app_name }}</a>
+        </div>
+
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+
+        <div class="footer">
+            <p>&copy; {{ app_name }}. All rights reserved.</p>
+            <p>
+                <a href="#">Unsubscribe</a> |
+                <a href="#">Privacy Policy</a> |
+                <a href="#">Terms of Service</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,12 +1,24 @@
+from contextlib import asynccontextmanager
+
 import fastapi
 import loguru
 from sqlalchemy import event
 from sqlalchemy.dialects.postgresql.asyncpg import AsyncAdapt_asyncpg_connection
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSessionTransaction
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, AsyncSessionTransaction
 from sqlalchemy.pool.base import _ConnectionRecord
 
 from src.repository.database import async_db
 from src.repository.table import Base
+
+
+@asynccontextmanager
+async def async_db_session():
+    """Context manager for creating async database sessions."""
+    session: AsyncSession = async_db.async_session_factory()
+    try:
+        yield session
+    finally:
+        await session.close()
 
 
 @event.listens_for(target=async_db.async_engine.sync_engine, identifier="connect")
@@ -28,10 +40,25 @@ def inspect_db_server_on_close(
 async def initialize_db_tables(connection: AsyncConnection) -> None:
     loguru.logger.info("Database Table Creation --- Initializing . . .")
 
-    await connection.run_sync(Base.metadata.drop_all)
+    # Only create tables that don't exist (don't drop existing tables)
+    # Use Alembic migrations for schema changes
     await connection.run_sync(Base.metadata.create_all)
 
     loguru.logger.info("Database Table Creation --- Successfully Initialized!")
+
+
+async def seed_initial_data() -> None:
+    """Seed initial data after tables are created"""
+    from src.seeders.seed_admin import seed_admin_on_startup
+
+    loguru.logger.info("Seeding Initial Data --- Starting . . .")
+
+    try:
+        async with async_db.async_session as session:
+            await seed_admin_on_startup(async_session=session)
+        loguru.logger.info("Seeding Initial Data --- Completed!")
+    except Exception as e:
+        loguru.logger.error(f"Seeding Initial Data --- Failed: {e}")
 
 
 async def initialize_db_connection(backend_app: fastapi.FastAPI) -> None:
@@ -41,6 +68,9 @@ async def initialize_db_connection(backend_app: fastapi.FastAPI) -> None:
 
     async with backend_app.state.db.async_engine.begin() as connection:
         await initialize_db_tables(connection=connection)
+
+    # Seed initial data (admin user)
+    await seed_initial_data()
 
     loguru.logger.info("Database Connection --- Successfully Established!")
 

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome to {{ app_name }}!{% endblock %}
+
+{% block content %}
+<h1>Welcome to {{ app_name }}!</h1>
+
+<p>Hi {{ username }},</p>
+
+<p>You've been successfully onboarded to <strong>{{ app_name }}</strong> — your one-stop destination for discovering and booking tickets to the best events around you.</p>
+
+<div class="highlight-box">
+    <h2 style="margin-top: 0;">What you can do on {{ app_name }}:</h2>
+    <ul style="color: #4b5563; margin-bottom: 0;">
+        <li>Browse and book tickets for concerts, shows, and live events</li>
+        <li>Get instant e-tickets delivered right to your inbox</li>
+        <li>Transfer tickets to friends and family</li>
+        <li>Manage all your bookings in one place</li>
+    </ul>
+</div>
+
+<div style="text-align: center;">
+    <a href="{{ frontend_url }}/events" class="button">Explore Events</a>
+</div>
+
+<div class="divider"></div>
+
+<p style="font-size: 13px; color: #6b7280;">
+    Need help? Reach out to us anytime at <a href="mailto:{{ support_email }}" style="color: #6366f1;">{{ support_email }}</a>.
+</p>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Payment Successful - {{ app_name }}{% endblock %}
+
+{% block content %}
+<h1>Payment Successful!</h1>
+
+<p>Hi {{ username }},</p>
+<p>Your payment has been processed successfully. Here are the details:</p>
+
+<div class="highlight-box" style="text-align: center;">
+    <div class="label">Amount Paid</div>
+    <div class="value" style="font-size: 32px; color: #059669;">{{ amount }}</div>
+</div>
+
+<div class="info-grid">
+    <div class="info-item">
+        <div class="label">Booking Number</div>
+        <div class="value">#{{ booking_number }}</div>
+    </div>
+    <div class="info-item">
+        <div class="label">Payment ID</div>
+        <div class="value">{{ payment_id }}</div>
+    </div>
+    <div class="info-item">
+        <div class="label">Event</div>
+        <div class="value">{{ event_title }}</div>
+    </div>
+    <div class="info-item">
+        <div class="label">Tickets</div>
+        <div class="value">{{ ticket_count }} ticket{{ "s" if ticket_count > 1 else "" }}</div>
+    </div>
+</div>
+
+<div class="divider"></div>
+
+<div style="text-align: center;">
+    <span class="success-badge">Payment Confirmed</span>
+</div>
+
+<p style="margin-top: 24px;">Your e-tickets are being prepared and will be available in your account shortly.</p>
+
+<div style="text-align: center; margin-top: 24px;">
+    <a href="{{ frontend_url }}/bookings" class="button">View My Bookings</a>
+</div>
+
+<p style="font-size: 13px; color: #6b7280; margin-top: 24px;">
+    If you have any questions about your payment, contact us at <a href="mailto:{{ support_email }}" style="color: #6366f1;">{{ support_email }}</a>.
+</p>
+{% endblock %}

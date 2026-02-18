@@ -14,4 +14,11 @@ done
 
 echo "DB Connection --- Successfully Established!"
 
+echo "Running database migrations . . ."
+alembic upgrade head
+echo "Database migrations --- Done!"
+
+echo "Seeding admin user . . ."
+python -m src.seeders.seed_admin || echo "Admin seeder skipped (may already exist)"
+
 exec "$@"

@@ -40,6 +40,7 @@ services:
     build:
       dockerfile: Dockerfile
       context: ./backend/
+    command: uvicorn src.main:backend_app --reload --host 0.0.0.0 --port 8000
     environment:
       - ENVIRONMENT=${ENVIRONMENT}
       - DEBUG=${DEBUG}
@@ -72,6 +73,24 @@ services:
       - HASHING_ALGORITHM_LAYER_1=${HASHING_ALGORITHM_LAYER_1}
       - HASHING_ALGORITHM_LAYER_2=${HASHING_ALGORITHM_LAYER_2}
       - HASHING_SALT=${HASHING_SALT}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - OTP_EXPIRY_MINUTES=${OTP_EXPIRY_MINUTES}
+      - OTP_LENGTH=${OTP_LENGTH}
+      - MSG91_AUTH_KEY=${MSG91_AUTH_KEY}
+      - MSG91_OTP_TEMPLATE_ID=${MSG91_OTP_TEMPLATE_ID}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_USE_TLS=${SMTP_USE_TLS}
+      - FROM_EMAIL=${FROM_EMAIL}
+      - FROM_NAME=${FROM_NAME}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
+      - FRONTEND_URL=${FRONTEND_URL}
     volumes:
       - ./backend/:/usr/backend/
     expose:

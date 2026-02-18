@@ -36,14 +36,22 @@ class JWTGenerator:
             raise EntityDoesNotExist(f"Cannot generate JWT token for without Account entity!")
 
         return self._generate_jwt_token(
-            jwt_data=JWTAccount(username=account.username, email=account.email).dict(),  # type: ignore
+            jwt_data=JWTAccount(
+                username=account.username,
+                email=account.email,
+                role=account.role,
+            ).dict(),  # type: ignore
             expires_delta=datetime.timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRATION_TIME),
         )
 
     def retrieve_details_from_token(self, token: str, secret_key: str) -> list[str]:
         try:
             payload = jose_jwt.decode(token=token, key=secret_key, algorithms=[settings.JWT_ALGORITHM])
-            jwt_account = JWTAccount(username=payload["username"], email=payload["email"])
+            jwt_account = JWTAccount(
+                username=payload["username"],
+                email=payload["email"],
+                role=payload.get("role", "user"),
+            )
 
         except JoseJWTError as token_decode_error:
             raise ValueError("Unable to decode JWT Token") from token_decode_error

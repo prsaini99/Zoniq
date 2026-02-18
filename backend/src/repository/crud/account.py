@@ -1,10 +1,11 @@
+import datetime
 import typing
 
 import sqlalchemy
 from sqlalchemy.sql import functions as sqlalchemy_functions
 
-from src.models.db.account import Account
-from src.models.schemas.account import AccountInCreate, AccountInLogin, AccountInUpdate
+from src.models.db.account import Account, UserRole
+from src.models.schemas.account import AccountInCreate, AccountInLogin, AccountInUpdate, AccountProfileUpdate
 from src.repository.crud.base import BaseCRUDRepository
 from src.securities.hashing.password import pwd_generator
 from src.securities.verifications.credentials import credential_verifier
@@ -13,8 +14,19 @@ from src.utilities.exceptions.password import PasswordDoesNotMatch
 
 
 class AccountCRUDRepository(BaseCRUDRepository):
-    async def create_account(self, account_create: AccountInCreate) -> Account:
-        new_account = Account(username=account_create.username, email=account_create.email, is_logged_in=True)
+    async def create_account(
+        self,
+        account_create: AccountInCreate,
+        role: str = UserRole.USER.value,
+    ) -> Account:
+        new_account = Account(
+            username=account_create.username,
+            email=account_create.email,
+            phone=account_create.phone,
+            full_name=account_create.full_name,
+            role=role,
+            is_logged_in=True,
+        )
 
         new_account.set_hash_salt(hash_salt=pwd_generator.generate_salt)
         new_account.set_hashed_password(
@@ -138,3 +150,275 @@ class AccountCRUDRepository(BaseCRUDRepository):
             raise EntityAlreadyExists(f"The email `{email}` is already registered!")  # type: ignore
 
         return True
+
+    # ==================== Email OTP methods ====================
+
+    async def generate_unique_username(self, email: str) -> str:
+        """Generate a unique username from email prefix + random suffix."""
+        import random
+        import re
+
+        local_part = email.split("@")[0]
+        local_part = re.sub(r'[^a-zA-Z0-9_]', '', local_part)
+
+        if not local_part:
+            local_part = "user"
+
+        local_part = local_part[:50]
+
+        for _ in range(10):
+            suffix = str(random.randint(1000, 9999))
+            candidate = f"{local_part}_{suffix}"
+
+            stmt = sqlalchemy.select(Account.username).where(Account.username == candidate)
+            result = await self.async_session.execute(statement=stmt)
+            if result.scalar() is None:
+                return candidate
+
+        import uuid
+        return f"{local_part}_{uuid.uuid4().hex[:8]}"
+
+    async def create_account_from_email_otp(self, email: str, username: str) -> Account:
+        """Create a new account for email-OTP signup (no password)."""
+        new_account = Account(
+            username=username,
+            email=email,
+            role=UserRole.USER.value,
+            is_verified=True,
+            is_active=True,
+            is_logged_in=True,
+        )
+
+        self.async_session.add(instance=new_account)
+        await self.async_session.commit()
+        await self.async_session.refresh(instance=new_account)
+
+        return new_account
+
+    # ==================== New methods for Phase 1 ====================
+
+    async def read_account_by_phone(self, phone: str) -> Account | None:
+        """Get account by phone number"""
+        stmt = sqlalchemy.select(Account).where(Account.phone == phone)
+        query = await self.async_session.execute(statement=stmt)
+        return query.scalar()
+
+    async def update_last_login(self, account_id: int) -> Account:
+        """Update last login timestamp and return refreshed account"""
+        stmt = (
+            sqlalchemy.update(Account)
+            .where(Account.id == account_id)
+            .values(
+                last_login_at=sqlalchemy_functions.now(),
+                is_logged_in=True,
+            )
+        )
+        await self.async_session.execute(statement=stmt)
+        await self.async_session.commit()
+        return await self.read_account_by_id(id=account_id)
+
+    async def update_profile(self, account_id: int, profile_update: AccountProfileUpdate) -> Account:
+        """Update user profile"""
+        update_data = profile_update.dict(exclude_unset=True, exclude_none=True)
+
+        if not update_data:
+            # Nothing to update, return current account
+            return await self.read_account_by_id(id=account_id)
+
+        stmt = (
+            sqlalchemy.update(Account)
+            .where(Account.id == account_id)
+            .values(**update_data, updated_at=sqlalchemy_functions.now())
+        )
+        await self.async_session.execute(statement=stmt)
+        await self.async_session.commit()
+
+        return await self.read_account_by_id(id=account_id)
+
+    async def verify_phone(self, account_id: int) -> None:
+        """Mark phone as verified"""
+        stmt = (
+            sqlalchemy.update(Account)
+            .where(Account.id == account_id)
+            .values(is_phone_verified=True, updated_at=sqlalchemy_functions.now())
+        )
+        await self.async_session.execute(statement=stmt)
+        await self.async_session.commit()
+
+    async def verify_email(self, account_id: int) -> None:
+        """Mark email as verified"""
+        stmt = (
+            sqlalchemy.update(Account)
+            .where(Account.id == account_id)
+            .values(is_verified=True, updated_at=sqlalchemy_functions.now())
+        )
+        await self.async_session.execute(statement=stmt)
+        await self.async_session.commit()
+
+    async def update_password(self, account_id: int, new_password: str) -> None:
+        """Update user password"""
+        account = await self.read_account_by_id(id=account_id)
+        if not account:
+            raise EntityDoesNotExist(f"Account with id `{account_id}` does not exist!")
+
+        new_salt = pwd_generator.generate_salt
+        new_hashed_password = pwd_generator.generate_hashed_password(
+            hash_salt=new_salt, new_password=new_password
+        )
+
+        stmt = (
+            sqlalchemy.update(Account)
+            .where(Account.id == account_id)
+            .values(
+                _hash_salt=new_salt,
+                _hashed_password=new_hashed_password,
+                updated_at=sqlalchemy_functions.now(),
+            )
+        )
+        await self.async_session.execute(statement=stmt)
+        await self.async_session.commit()
+
+    # ==================== Admin methods ====================
+
+    async def read_accounts_paginated(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        search: str | None = None,
+    ) -> tuple[typing.Sequence[Account], int]:
+        """Get accounts with pagination and search (for admin)"""
+        stmt = sqlalchemy.select(Account)
+
+        # Apply search filter
+        if search:
+            search_pattern = f"%{search}%"
+            stmt = stmt.where(
+                sqlalchemy.or_(
+                    Account.username.ilike(search_pattern),
+                    Account.email.ilike(search_pattern),
+                    Account.full_name.ilike(search_pattern),
+                )
+            )
+
+        # Count total
+        count_stmt = sqlalchemy.select(sqlalchemy.func.count()).select_from(stmt.subquery())
+        count_result = await self.async_session.execute(statement=count_stmt)
+        total = count_result.scalar() or 0
+
+        # Order and paginate
+        stmt = stmt.order_by(Account.created_at.desc())
+        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+
+        query = await self.async_session.execute(statement=stmt)
+        accounts = query.scalars().all()
+
+        return accounts, total
+
+    async def block_user(self, account_id: int, reason: str | None = None) -> Account:
+        """Block a user account"""
+        stmt = (
+            sqlalchemy.update(Account)
+            .where(Account.id == account_id)
+            .values(
+                is_blocked=True,
+                blocked_reason=reason,
+                updated_at=sqlalchemy_functions.now(),
+            )
+        )
+        await self.async_session.execute(statement=stmt)
+        await self.async_session.commit()
+
+        return await self.read_account_by_id(id=account_id)
+
+    async def unblock_user(self, account_id: int) -> Account:
+        """Unblock a user account"""
+        stmt = (
+            sqlalchemy.update(Account)
+            .where(Account.id == account_id)
+            .values(
+                is_blocked=False,
+                blocked_reason=None,
+                updated_at=sqlalchemy_functions.now(),
+            )
+        )
+        await self.async_session.execute(statement=stmt)
+        await self.async_session.commit()
+
+        return await self.read_account_by_id(id=account_id)
+
+    async def make_admin(self, account_id: int) -> Account:
+        """Promote a user to admin"""
+        stmt = (
+            sqlalchemy.update(Account)
+            .where(Account.id == account_id)
+            .values(role=UserRole.ADMIN.value, updated_at=sqlalchemy_functions.now())
+        )
+        await self.async_session.execute(statement=stmt)
+        await self.async_session.commit()
+
+        return await self.read_account_by_id(id=account_id)
+
+    async def remove_admin(self, account_id: int) -> Account:
+        """Demote an admin to regular user"""
+        stmt = (
+            sqlalchemy.update(Account)
+            .where(Account.id == account_id)
+            .values(role=UserRole.USER.value, updated_at=sqlalchemy_functions.now())
+        )
+        await self.async_session.execute(statement=stmt)
+        await self.async_session.commit()
+
+        return await self.read_account_by_id(id=account_id)
+
+    async def get_stats(self) -> dict:
+        """Get user statistics for admin dashboard"""
+        # Total users
+        total_stmt = sqlalchemy.select(sqlalchemy.func.count()).select_from(Account)
+        total_result = await self.async_session.execute(statement=total_stmt)
+        total_users = total_result.scalar() or 0
+
+        # Active users (not blocked)
+        active_stmt = sqlalchemy.select(sqlalchemy.func.count()).select_from(Account).where(
+            Account.is_blocked == False
+        )
+        active_result = await self.async_session.execute(statement=active_stmt)
+        active_users = active_result.scalar() or 0
+
+        # Blocked users
+        blocked_stmt = sqlalchemy.select(sqlalchemy.func.count()).select_from(Account).where(
+            Account.is_blocked == True
+        )
+        blocked_result = await self.async_session.execute(statement=blocked_stmt)
+        blocked_users = blocked_result.scalar() or 0
+
+        # Admin users
+        admin_stmt = sqlalchemy.select(sqlalchemy.func.count()).select_from(Account).where(
+            Account.role == UserRole.ADMIN.value
+        )
+        admin_result = await self.async_session.execute(statement=admin_stmt)
+        admin_users = admin_result.scalar() or 0
+
+        # New users today
+        today_start = datetime.datetime.now(datetime.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_stmt = sqlalchemy.select(sqlalchemy.func.count()).select_from(Account).where(
+            Account.created_at >= today_start
+        )
+        today_result = await self.async_session.execute(statement=today_stmt)
+        new_users_today = today_result.scalar() or 0
+
+        # New users this week
+        seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+        week_stmt = sqlalchemy.select(sqlalchemy.func.count()).select_from(Account).where(
+            Account.created_at >= seven_days_ago
+        )
+        week_result = await self.async_session.execute(statement=week_stmt)
+        new_users_week = week_result.scalar() or 0
+
+        return {
+            "total_users": total_users,
+            "active_users": active_users,
+            "blocked_users": blocked_users,
+            "admin_users": admin_users,
+            "new_users_today": new_users_today,
+            "new_users_week": new_users_week,
+        }

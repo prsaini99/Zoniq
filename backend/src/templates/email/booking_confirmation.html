@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Booking Confirmed - {{ event_title }}{% endblock %}
+
+{% block content %}
+<h1>Booking Confirmed!</h1>
+
+<p>Great news! Your booking has been confirmed. Here are your booking details:</p>
+
+<div class="highlight-box">
+    <div class="label">Booking Number</div>
+    <div class="value">#{{ booking_number }}</div>
+</div>
+
+<h2>Event Details</h2>
+<div class="info-grid">
+    <div class="info-item">
+        <div class="label">Event</div>
+        <div class="value">{{ event_title }}</div>
+    </div>
+    <div class="info-item">
+        <div class="label">Date & Time</div>
+        <div class="value">{{ event_date }}</div>
+    </div>
+    <div class="info-item">
+        <div class="label">Venue</div>
+        <div class="value">{{ venue_name }}</div>
+    </div>
+    <div class="info-item">
+        <div class="label">Total Tickets</div>
+        <div class="value">{{ ticket_count }}</div>
+    </div>
+</div>
+
+{% if tickets %}
+<h2>Your Tickets</h2>
+<div class="ticket-list">
+    {% for ticket in tickets %}
+    <div class="ticket-item">
+        <div>
+            <strong>{{ ticket.category_name }}</strong>
+            {% if ticket.seat_label %}
+            <span style="color: #6b7280;"> - {{ ticket.seat_label }}</span>
+            {% endif %}
+        </div>
+        <div>{{ ticket.price }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="divider"></div>
+
+<div style="text-align: right;">
+    <div style="font-size: 14px; color: #6b7280;">Total Amount</div>
+    <div style="font-size: 24px; font-weight: bold; color: #1f2937;">{{ total_amount }}</div>
+</div>
+
+<div style="text-align: center; margin-top: 32px;">
+    <a href="#" class="button">View My Tickets</a>
+</div>
+
+<p style="text-align: center; margin-top: 24px; color: #6b7280; font-size: 14px;">
+    Your e-tickets will be sent in a separate email shortly.
+</p>
+{% endblock %}

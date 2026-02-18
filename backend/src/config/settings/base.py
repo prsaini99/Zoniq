@@ -3,11 +3,12 @@ import pathlib
 
 import decouple
 import pydantic
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR: pathlib.Path = pathlib.Path(__file__).parent.parent.parent.parent.parent.resolve()
 
 
-class BackendBaseSettings(pydantic.BaseSettings):
+class BackendBaseSettings(BaseSettings):
     TITLE: str = "DAPSQL FARN-Stack Template Application"
     VERSION: str = "0.1.0"
     TIMEZONE: str = "UTC"
@@ -70,10 +71,42 @@ class BackendBaseSettings(pydantic.BaseSettings):
     HASHING_SALT: str = decouple.config("HASHING_SALT", cast=str)  # type: ignore
     JWT_ALGORITHM: str = decouple.config("JWT_ALGORITHM", cast=str)  # type: ignore
 
-    class Config(pydantic.BaseConfig):
-        case_sensitive: bool = True
-        env_file: str = f"{str(ROOT_DIR)}/.env"
-        validate_assignment: bool = True
+    # Admin Configuration
+    ADMIN_EMAIL: str = decouple.config("ADMIN_EMAIL", default="admin@zoniq.com", cast=str)  # type: ignore
+    ADMIN_PASSWORD: str = decouple.config("ADMIN_PASSWORD", default="admin123!", cast=str)  # type: ignore
+    ADMIN_USERNAME: str = decouple.config("ADMIN_USERNAME", default="admin", cast=str)  # type: ignore
+
+    # OTP Configuration
+    OTP_EXPIRY_MINUTES: int = decouple.config("OTP_EXPIRY_MINUTES", default=10, cast=int)  # type: ignore
+    OTP_LENGTH: int = decouple.config("OTP_LENGTH", default=6, cast=int)  # type: ignore
+
+    # MSG91 Configuration
+    MSG91_AUTH_KEY: str = decouple.config("MSG91_AUTH_KEY", default="", cast=str)  # type: ignore
+    MSG91_OTP_TEMPLATE_ID: str = decouple.config("MSG91_OTP_TEMPLATE_ID", default="", cast=str)  # type: ignore
+
+    # Razorpay Configuration
+    RAZORPAY_KEY_ID: str = decouple.config("RAZORPAY_KEY_ID", default="", cast=str)  # type: ignore
+    RAZORPAY_KEY_SECRET: str = decouple.config("RAZORPAY_KEY_SECRET", default="", cast=str)  # type: ignore
+    RAZORPAY_WEBHOOK_SECRET: str = decouple.config("RAZORPAY_WEBHOOK_SECRET", default="", cast=str)  # type: ignore
+
+    # Email/SMTP Configuration
+    SMTP_HOST: str = decouple.config("SMTP_HOST", default="smtp.gmail.com", cast=str)  # type: ignore
+    SMTP_PORT: int = decouple.config("SMTP_PORT", default=587, cast=int)  # type: ignore
+    SMTP_USERNAME: str = decouple.config("SMTP_USERNAME", default="", cast=str)  # type: ignore
+    SMTP_PASSWORD: str = decouple.config("SMTP_PASSWORD", default="", cast=str)  # type: ignore
+    SMTP_USE_TLS: bool = decouple.config("SMTP_USE_TLS", default=True, cast=bool)  # type: ignore
+    FROM_EMAIL: str = decouple.config("FROM_EMAIL", default="noreply@zoniq.com", cast=str)  # type: ignore
+    FROM_NAME: str = decouple.config("FROM_NAME", default="ZONIQ", cast=str)  # type: ignore
+
+    # Frontend URL for email links
+    FRONTEND_URL: str = decouple.config("FRONTEND_URL", default="http://localhost:3000", cast=str)  # type: ignore
+
+    model_config = SettingsConfigDict(
+        case_sensitive=True,
+        env_file=f"{str(ROOT_DIR)}/.env",
+        validate_assignment=True,
+        extra="ignore",
+    )
 
     @property
     def set_backend_app_attributes(self) -> dict[str, str | bool | None]:
