@@ -26,8 +26,8 @@ from sqlalchemy.orm import sessionmaker
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+import src.models.db  # noqa: F401 — import all models so relationships resolve
 from src.models.db.account import Account, UserRole
-from src.models.db.wishlist import Wishlist  # noqa: F401 — needed for Account relationship resolution
 from src.securities.hashing.password import pwd_generator
 from src.repository.database import async_db
 
