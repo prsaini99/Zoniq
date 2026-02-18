@@ -27,6 +27,7 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.models.db.account import Account, UserRole
+from src.models.db.wishlist import Wishlist  # noqa: F401 — needed for Account relationship resolution
 from src.securities.hashing.password import pwd_generator
 from src.repository.database import async_db
 
