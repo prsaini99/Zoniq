@@ -1,3 +1,4 @@
+# Development-specific settings -- enables debug mode for auto-reload and verbose output
 from src.config.settings.base import BackendBaseSettings
 from src.config.settings.environment import Environment
 

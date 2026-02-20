@@ -1,3 +1,21 @@
+/*
+ * Ticket Detail page: shows full details for a single booking, including
+ * the event banner, booking metadata, payment status, and individual ticket cards.
+ *
+ * Key features:
+ *   - Fetches booking details by ID from the bookings API.
+ *   - Displays event banner image with "Event Ended" overlay for past events.
+ *   - Shows booking number, date, ticket count, total amount, and payment status.
+ *   - Renders a TicketCard for each booking item (individual ticket) with:
+ *       - Category name, seat label, ticket number (with copy-to-clipboard).
+ *       - PDF download button (available for confirmed, non-past, non-used tickets).
+ *       - "Used" or "Event Ended" status overlay.
+ *   - "Download All" button for bulk ticket download.
+ *   - Contact support section for confirmed upcoming bookings.
+ *
+ * Requires authentication; redirects to /login if not authenticated.
+ */
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -24,6 +42,7 @@ import { bookingsApi, ticketsApi } from "@/lib/api";
 import { formatDate, formatTime, formatPrice } from "@/lib/utils";
 import type { BookingDetail, BookingStatus, BookingItem } from "@/types";
 
+// Maps each booking status to a display label and badge variant
 const STATUS_CONFIG: Record<
   string,
   { label: string; variant: "default" | "success" | "warning" | "error" }
@@ -43,24 +62,35 @@ interface TicketCardProps {
   bookingStatus: BookingStatus;
 }
 
+/*
+ * TicketCard: renders a single ticket within a booking.
+ * Shows category, seat label, ticket number (with clipboard copy), price,
+ * and a PDF download button when applicable.
+ * Dims the card if the ticket has been used or the event has ended.
+ */
 function TicketCard({ item, eventDate, bookingStatus }: TicketCardProps) {
+  // Track whether the ticket number was just copied to clipboard
   const [copied, setCopied] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
   const isPastEvent = eventDate < new Date();
   const isUsed = item.isUsed;
+  // PDF download is only allowed for confirmed, future, unused tickets
   const canDownload = bookingStatus === "confirmed" && !isPastEvent && !isUsed;
 
+  // Copy the ticket number to the clipboard and show a brief confirmation
   const handleCopyTicketNumber = async () => {
     await navigator.clipboard.writeText(item.ticketNumber);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Download the ticket as a PDF by fetching a blob from the API
   const handleDownloadPDF = async () => {
     setIsDownloading(true);
     try {
       const blob = await ticketsApi.downloadPDF(item.id);
+      // Create a temporary link element to trigger the download
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -81,6 +111,7 @@ function TicketCard({ item, eventDate, bookingStatus }: TicketCardProps) {
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex-1">
+            {/* Category and seat information */}
             <div className="flex items-center gap-2 mb-2">
               <span className="text-sm font-medium text-primary">{item.categoryName}</span>
               {item.seatLabel && (
@@ -89,6 +120,7 @@ function TicketCard({ item, eventDate, bookingStatus }: TicketCardProps) {
                 </span>
               )}
             </div>
+            {/* Ticket number with copy-to-clipboard button */}
             <div className="flex items-center gap-2 text-sm text-foreground-muted">
               <span>Ticket: {item.ticketNumber}</span>
               <button
@@ -107,7 +139,7 @@ function TicketCard({ item, eventDate, bookingStatus }: TicketCardProps) {
               {formatPrice(parseFloat(item.price))}
             </p>
 
-            {/* Action Buttons */}
+            {/* Download PDF button (only for eligible tickets) */}
             <div className="flex items-center gap-2 mt-3">
               {canDownload && (
                 <Button
@@ -129,7 +161,7 @@ function TicketCard({ item, eventDate, bookingStatus }: TicketCardProps) {
             </div>
           </div>
 
-          {/* Status Badge */}
+          {/* Ticket icon and "Used" badge */}
           <div className="flex flex-col items-end gap-2">
             <div className="w-16 h-16 bg-primary/10 rounded-lg flex items-center justify-center">
               <Ticket className="h-8 w-8 text-primary" />
@@ -142,7 +174,7 @@ function TicketCard({ item, eventDate, bookingStatus }: TicketCardProps) {
           </div>
         </div>
 
-        {/* Used/Past Overlay */}
+        {/* Used/Past event status overlay label */}
         {(isUsed || isPastEvent) && (
           <div className="absolute top-2 right-2">
             <span
@@ -165,12 +197,14 @@ export default function TicketDetailPage() {
   const router = useRouter();
   const params = useParams();
   const isAuthenticated = useIsAuthenticated();
+  // Extract booking ID from the dynamic route segment
   const bookingId = params.id as string;
 
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch the booking detail from the API by ID
   const fetchBooking = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -184,6 +218,7 @@ export default function TicketDetailPage() {
     }
   }, [bookingId]);
 
+  // Redirect if not authenticated, otherwise fetch booking on mount
   useEffect(() => {
     if (!isAuthenticated) {
       router.push("/login?redirect=/my-tickets");
@@ -194,6 +229,7 @@ export default function TicketDetailPage() {
     }
   }, [isAuthenticated, router, bookingId, fetchBooking]);
 
+  // Loading skeleton while fetching data
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -208,6 +244,7 @@ export default function TicketDetailPage() {
     );
   }
 
+  // Error / not found state
   if (error || !booking) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -254,7 +291,7 @@ export default function TicketDetailPage() {
           Back to My Tickets
         </Button>
 
-        {/* Event Header */}
+        {/* Event Header: banner image, status badge, title, date/time/venue, and event link */}
         <Card className="overflow-hidden mb-6">
           <div className="relative h-48 w-full">
             {booking.event?.bannerImageUrl ? (
@@ -308,6 +345,7 @@ export default function TicketDetailPage() {
                   )}
                 </div>
               </div>
+              {/* Link to the event detail page */}
               {booking.event && (
                 <Link
                   href={`/events/${booking.event.slug}`}
@@ -320,7 +358,7 @@ export default function TicketDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Booking Details */}
+        {/* Booking Details card: booking number, date, ticket count, total, and payment status */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -354,7 +392,7 @@ export default function TicketDetailPage() {
               </div>
             </div>
 
-            {/* Payment Status */}
+            {/* Payment Status indicator */}
             <div className="mt-4 pt-4 border-t border-border">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-foreground-muted">Payment Status</span>
@@ -377,7 +415,7 @@ export default function TicketDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Tickets */}
+        {/* Individual Ticket Cards grid with "Download All" button */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground">
@@ -405,7 +443,7 @@ export default function TicketDetailPage() {
           </div>
         </div>
 
-        {/* Actions */}
+        {/* Contact Support section for confirmed upcoming bookings */}
         {booking.status === "confirmed" && !isPastEvent && (
           <Card>
             <CardContent className="p-4">

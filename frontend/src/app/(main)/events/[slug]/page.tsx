@@ -1,3 +1,23 @@
+/*
+ * Event detail page: displays comprehensive information about a single event
+ * and provides the booking interface.
+ *
+ * Data fetched on mount (by slug):
+ *   - Event details (title, description, date, venue, images, organizer, terms).
+ *   - Seat categories (ticket types with prices and colors).
+ *   - Seat availability map.
+ *   - Queue status (if the event has a virtual queue enabled).
+ *
+ * Booking flow:
+ *   - If the user is not authenticated, clicking "Book Now" redirects to /login.
+ *   - If a virtual queue is enabled and the user did NOT arrive from the queue page,
+ *     they are redirected to /queue/[eventId] to wait their turn.
+ *   - If the user arrived from the queue (fromQueue=true) or there is no queue,
+ *     the TicketSelectionModal opens for choosing ticket categories and quantities.
+ *
+ * Wrapped in Suspense because it reads searchParams via useSearchParams().
+ */
+
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
@@ -31,20 +51,27 @@ function EventDetailContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Extract the event slug from the dynamic route segment
   const slug = params.slug as string;
   const isAuthenticated = useIsAuthenticated();
+  // Check if the user arrived from the queue waiting room
   const fromQueue = searchParams.get("fromQueue") === "true";
 
+  // Core data state
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [categories, setCategories] = useState<SeatCategory[]>([]);
   const [seatsData, setSeatsData] = useState<EventSeatsResponse | null>(null);
   const [queueStatus, setQueueStatus] = useState<QueueStatusResponse | null>(null);
+
+  // UI state
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isJoiningQueue, setIsJoiningQueue] = useState(false);
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
+  // Prevents auto-opening the ticket modal more than once from a queue redirect
   const [hasOpenedFromQueue, setHasOpenedFromQueue] = useState(false);
 
+  // Fetch event data, seat categories, seat map, and (optionally) queue status on mount
   useEffect(() => {
     const fetchEventData = async () => {
       try {
@@ -80,7 +107,7 @@ function EventDetailContent() {
     fetchEventData();
   }, [slug]);
 
-  // Auto-open ticket modal if user came from queue
+  // Auto-open ticket modal if user came from queue and data is ready
   useEffect(() => {
     if (fromQueue && !isLoading && event && categories.length > 0 && !hasOpenedFromQueue) {
       setIsTicketModalOpen(true);
@@ -88,7 +115,9 @@ function EventDetailContent() {
     }
   }, [fromQueue, isLoading, event, categories, hasOpenedFromQueue]);
 
+  // Handle "Book Now" / "Join Queue" button click
   const handleBookClick = () => {
+    // Redirect unauthenticated users to login with a return URL
     if (!isAuthenticated) {
       router.push(`/login?redirect=/events/${slug}`);
       return;
@@ -105,10 +134,12 @@ function EventDetailContent() {
     setIsTicketModalOpen(true);
   };
 
+  // Loading state
   if (isLoading) {
     return <PageSpinner />;
   }
 
+  // Error / not found state
   if (error || !event) {
     return (
       <div className="container mx-auto px-4 py-16 text-center">
@@ -126,10 +157,12 @@ function EventDetailContent() {
     );
   }
 
+  // Derived booking availability flags
   const isSoldOut = event.availableSeats === 0;
   const isBookingOpen = event.isBookingOpen;
   const canBook = isBookingOpen && !isSoldOut;
 
+  // Calculate the price range across all active seat categories
   const lowestPrice = categories.length > 0
     ? Math.min(...categories.filter(c => c.isActive).map((c) => parseFloat(c.price)))
     : 0;
@@ -139,7 +172,7 @@ function EventDetailContent() {
 
   return (
     <div className="min-h-screen">
-      {/* Hero Banner */}
+      {/* Hero Banner: event image with gradient overlay */}
       <div className="relative h-[300px] md:h-[400px] bg-background-elevated">
         {event.bannerImageUrl ? (
           <Image
@@ -171,7 +204,7 @@ function EventDetailContent() {
           </Button>
         </div>
 
-        {/* Action Buttons */}
+        {/* Action Buttons: share and wishlist */}
         <div className="absolute top-4 right-4 flex gap-2">
           <Button variant="secondary" size="icon" className="glass">
             <Share2 className="h-4 w-4" />
@@ -186,9 +219,9 @@ function EventDetailContent() {
 
       <div className="container mx-auto px-4 -mt-20 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
+          {/* Main Content (left 2/3) */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Event Header */}
+            {/* Event Header: category badge, status, title, short description, date/time/venue */}
             <Card>
               <CardContent className="p-6">
                 <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -209,7 +242,7 @@ function EventDetailContent() {
                   </p>
                 )}
 
-                {/* Event Details */}
+                {/* Event Details: date, time, and venue */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex items-center gap-3 text-foreground-muted">
                     <div className="h-10 w-10 rounded-lg bg-primary-light flex items-center justify-center">
@@ -259,7 +292,7 @@ function EventDetailContent() {
               </CardContent>
             </Card>
 
-            {/* Description */}
+            {/* Full event description */}
             {event.description && (
               <Card>
                 <CardHeader>
@@ -276,7 +309,7 @@ function EventDetailContent() {
               </Card>
             )}
 
-            {/* Terms & Conditions */}
+            {/* Terms & Conditions (if provided by the event organizer) */}
             {event.termsAndConditions && (
               <Card>
                 <CardHeader>
@@ -310,7 +343,7 @@ function EventDetailContent() {
             )}
           </div>
 
-          {/* Sidebar - Booking */}
+          {/* Sidebar - Booking card (right 1/3, sticky) */}
           <div className="space-y-6">
             <Card className="sticky top-24">
               <CardHeader>
@@ -320,7 +353,7 @@ function EventDetailContent() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Price Range */}
+                {/* Price Range display */}
                 <div>
                   <div className="text-sm text-foreground-muted mb-1">
                     {lowestPrice === highestPrice ? "Price" : "Starting from"}
@@ -335,7 +368,7 @@ function EventDetailContent() {
                   )}
                 </div>
 
-                {/* Ticket Categories Preview */}
+                {/* Ticket Categories Preview: color-coded chips for each active category */}
                 {categories.length > 0 && (
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-foreground">
@@ -358,7 +391,7 @@ function EventDetailContent() {
                   </div>
                 )}
 
-                {/* Availability */}
+                {/* Seat Availability: available vs total seats */}
                 <div className="flex items-center justify-between py-3 border-t border-border">
                   <div className="flex items-center gap-2 text-sm text-foreground-muted">
                     <Users className="h-4 w-4" />
@@ -369,7 +402,7 @@ function EventDetailContent() {
                   </span>
                 </div>
 
-                {/* Booking Window */}
+                {/* Booking Window: shows when booking opens and closes */}
                 <div className="text-xs text-foreground-muted space-y-1">
                   <div>
                     Booking opens: {formatDate(event.bookingStartDate)} at{" "}
@@ -381,7 +414,7 @@ function EventDetailContent() {
                   </div>
                 </div>
 
-                {/* Queue Info (if enabled) */}
+                {/* Queue Info card (shown only if virtual queue is enabled) */}
                 {event.queueEnabled && queueStatus && (
                   <div className="rounded-lg bg-primary/5 border border-primary/20 p-4 space-y-2">
                     <div className="flex items-center gap-2 text-sm font-medium text-primary">
@@ -405,7 +438,7 @@ function EventDetailContent() {
                   </div>
                 )}
 
-                {/* Book Button */}
+                {/* Book / Join Queue button: label changes based on event state */}
                 <Button
                   className="w-full"
                   size="lg"
@@ -424,7 +457,7 @@ function EventDetailContent() {
                     : "Book Now"}
                 </Button>
 
-                {/* Info */}
+                {/* Max tickets per booking info */}
                 <div className="text-xs text-foreground-subtle text-center">
                   Max {event.maxTicketsPerBooking} tickets per booking
                 </div>
@@ -434,7 +467,7 @@ function EventDetailContent() {
         </div>
       </div>
 
-      {/* Ticket Selection Modal */}
+      {/* Ticket Selection Modal: opened when user clicks "Book Now" or arrives from queue */}
       <TicketSelectionModal
         isOpen={isTicketModalOpen}
         onClose={() => setIsTicketModalOpen(false)}
@@ -447,6 +480,7 @@ function EventDetailContent() {
   );
 }
 
+// Wrap in Suspense because EventDetailContent uses useSearchParams()
 export default function EventDetailPage() {
   return (
     <Suspense>

@@ -1,3 +1,4 @@
+# Payment routes for Razorpay integration: order creation, verification, webhooks, and booking cancellation
 import logging
 
 import fastapi
@@ -27,6 +28,9 @@ logger = logging.getLogger(__name__)
 router = fastapi.APIRouter(prefix="/payments", tags=["payments"])
 
 
+# --- POST /payments/create-order ---
+# Initiates the Razorpay payment flow by creating an order tied to a booking.
+# The frontend uses the returned order_id and key_id to open Razorpay checkout.
 @router.post(
     "/create-order",
     name="payments:create-order",
@@ -43,27 +47,29 @@ async def create_payment_order(
     Create a Razorpay order for a booking.
     This initiates the payment flow - frontend will use this to open Razorpay checkout.
     """
-    # Fetch the booking
+    # Fetch the booking by ID; raise 404 if it does not exist
     try:
         booking = await booking_repo.read_booking_by_id(request.booking_id)
     except EntityDoesNotExist:
         raise HTTPException(status_code=404, detail="Booking not found")
 
-    # Verify ownership
+    # Only the booking owner can create a payment order for it
     if booking.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Check booking status
+    # Prevent payment for bookings that are cancelled or in a non-payable state
     if booking.status not in ("pending", "confirmed"):
         raise HTTPException(status_code=400, detail=f"Cannot pay for {booking.status} booking")
 
+    # Guard against duplicate payments for an already-paid booking
     if booking.payment_status == "success":
         raise HTTPException(status_code=400, detail="Booking already paid")
 
-    # Check if there's already a pending payment order
+    # Check if a previously created Razorpay order is still valid (status "created")
+    # If so, return it to avoid creating duplicate orders
     existing_payment = await payment_repo.read_payment_by_booking_id(booking.id)
     if existing_payment and existing_payment.status == "created":
-        # Return existing order if still valid
+        # Attempt to fetch the order from Razorpay to verify it has not expired
         try:
             order = razorpay_service.fetch_order(existing_payment.razorpay_order_id)
             if order.get("status") == "created":
@@ -81,10 +87,10 @@ async def create_payment_order(
         except Exception:
             pass  # Order expired or invalid, create new one
 
-    # Convert amount to paise (multiply by 100)
+    # Razorpay expects the amount in the smallest currency unit (paise for INR)
     amount_paise = int(float(booking.final_amount) * 100)
 
-    # Create Razorpay order
+    # Create a new Razorpay order with booking metadata stored in notes
     try:
         order = razorpay_service.create_order(
             amount_paise=amount_paise,
@@ -100,7 +106,7 @@ async def create_payment_order(
         logger.error(f"Failed to create Razorpay order: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to create payment order")
 
-    # Save payment record
+    # Persist the payment record in the database linked to the booking and Razorpay order
     await payment_repo.create_payment(
         booking_id=booking.id,
         user_id=current_user.id,
@@ -109,6 +115,7 @@ async def create_payment_order(
         currency="INR",
     )
 
+    # Return the order details needed by the frontend to launch Razorpay checkout
     return CreatePaymentOrderResponse(
         order_id=order["id"],
         amount=amount_paise,
@@ -122,6 +129,9 @@ async def create_payment_order(
     )
 
 
+# --- POST /payments/verify ---
+# Called by the frontend after the user completes Razorpay checkout.
+# Verifies the payment signature, marks payment as successful, and sends a confirmation email.
 @router.post(
     "/verify",
     name="payments:verify-payment",
@@ -138,17 +148,17 @@ async def verify_payment(
     Verify a Razorpay payment after successful checkout.
     This should be called from frontend after Razorpay checkout completes.
     """
-    # Get the payment record
+    # Look up the internal payment record using the Razorpay order ID
     try:
         payment = await payment_repo.read_payment_by_order_id(request.razorpay_order_id)
     except EntityDoesNotExist:
         raise HTTPException(status_code=404, detail="Payment order not found")
 
-    # Verify ownership
+    # Ensure the authenticated user owns this payment
     if payment.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Already processed?
+    # If this payment was already captured or refunded, return early with success
     if payment.status in ("captured", "refunded"):
         booking = await booking_repo.read_booking_by_id(payment.booking_id)
         return VerifyPaymentResponse(
@@ -158,15 +168,15 @@ async def verify_payment(
             message="Payment already verified",
         )
 
-    # Verify signature
+    # Verify the cryptographic signature from Razorpay to confirm payment authenticity
     is_valid = razorpay_service.verify_payment_signature(
         razorpay_order_id=request.razorpay_order_id,
         razorpay_payment_id=request.razorpay_payment_id,
         razorpay_signature=request.razorpay_signature,
     )
 
+    # If signature verification fails, mark the payment as failed and reject the request
     if not is_valid:
-        # Update payment as failed
         await payment_repo.update_payment_failed(
             razorpay_order_id=request.razorpay_order_id,
             razorpay_payment_id=request.razorpay_payment_id,
@@ -175,14 +185,14 @@ async def verify_payment(
         )
         raise HTTPException(status_code=400, detail="Payment verification failed")
 
-    # Get payment details from Razorpay
+    # Fetch the payment method (UPI, card, etc.) from Razorpay for record-keeping
     try:
         payment_details = razorpay_service.fetch_payment(request.razorpay_payment_id)
         method = payment_details.get("method")
     except Exception:
         method = None
 
-    # Update payment as successful
+    # Mark the payment as successfully captured in the database
     await payment_repo.update_payment_success(
         razorpay_order_id=request.razorpay_order_id,
         razorpay_payment_id=request.razorpay_payment_id,
@@ -190,10 +200,11 @@ async def verify_payment(
         method=method,
     )
 
-    # Get booking for response
+    # Retrieve the booking for the response and email content
     booking = await booking_repo.read_booking_by_id(payment.booking_id)
 
-    # Send payment confirmation email (fire-and-forget)
+    # Send a payment confirmation email asynchronously (fire-and-forget)
+    # Failures here are logged but do not block the API response
     try:
         await smtp_email_service.send_payment_confirmation(
             to_email=current_user.email,
@@ -215,6 +226,8 @@ async def verify_payment(
     )
 
 
+# --- GET /payments/{payment_id} ---
+# Retrieves detailed payment information for a specific payment owned by the current user.
 @router.get(
     "/{payment_id}",
     name="payments:get-payment",
@@ -227,14 +240,17 @@ async def get_payment(
     payment_repo: PaymentCRUDRepository = Depends(get_repository(repo_type=PaymentCRUDRepository)),
 ) -> PaymentResponse:
     """Get payment details by ID."""
+    # Fetch the payment record; raise 404 if not found
     try:
         payment = await payment_repo.read_payment_by_id(payment_id)
     except EntityDoesNotExist:
         raise HTTPException(status_code=404, detail="Payment not found")
 
+    # Enforce ownership: only the paying user can view their payment details
     if payment.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # Return the full payment details including status, method, and any error info
     return PaymentResponse(
         id=payment.id,
         booking_id=payment.booking_id,
@@ -251,6 +267,10 @@ async def get_payment(
     )
 
 
+# --- POST /payments/webhook ---
+# Server-to-server endpoint called by Razorpay to notify about payment events.
+# No user auth is required; instead, the request is verified via webhook signature.
+# Handles payment.captured, payment.failed, and refund events.
 @router.post(
     "/webhook",
     name="payments:webhook",
@@ -264,16 +284,16 @@ async def payment_webhook(
     Razorpay webhook handler for payment events.
     This is called by Razorpay to notify about payment status changes.
     """
-    # Get raw body for signature verification
+    # Read the raw request body for signature verification
     body = await request.body()
     signature = request.headers.get("X-Razorpay-Signature", "")
 
-    # Verify webhook signature
+    # Validate the webhook signature using the shared secret to prevent spoofing
     if not razorpay_service.verify_webhook_signature(body, signature):
         logger.warning("Invalid webhook signature")
         raise HTTPException(status_code=400, detail="Invalid signature")
 
-    # Parse the event
+    # Parse the JSON event payload from Razorpay
     try:
         payload = await request.json()
     except Exception:
@@ -284,7 +304,7 @@ async def payment_webhook(
 
     logger.info(f"Received Razorpay webhook: {event}")
 
-    # Handle payment events
+    # Handle "payment.captured" -- payment was successfully captured
     if event == "payment.captured":
         payment_entity = event_payload.get("payment", {}).get("entity", {})
         order_id = payment_entity.get("order_id")
@@ -292,6 +312,7 @@ async def payment_webhook(
         method = payment_entity.get("method")
 
         if order_id:
+            # Update the internal payment record to reflect successful capture
             try:
                 await payment_repo.update_payment_success(
                     razorpay_order_id=order_id,
@@ -303,6 +324,7 @@ async def payment_webhook(
             except EntityDoesNotExist:
                 logger.warning(f"Payment order not found: {order_id}")
 
+    # Handle "payment.failed" -- payment attempt failed
     elif event == "payment.failed":
         payment_entity = event_payload.get("payment", {}).get("entity", {})
         order_id = payment_entity.get("order_id")
@@ -312,6 +334,7 @@ async def payment_webhook(
 
         if order_id:
             try:
+                # Mark the payment as failed with error details from Razorpay
                 payment = await payment_repo.update_payment_failed(
                     razorpay_order_id=order_id,
                     razorpay_payment_id=payment_id,
@@ -320,7 +343,7 @@ async def payment_webhook(
                 )
                 logger.info(f"Payment failed via webhook: {order_id}")
 
-                # Release seats for the failed booking
+                # Release the reserved seats so other users can book them
                 if payment and payment.booking_id:
                     booking_repo = BookingCRUDRepository(payment_repo.async_session)
                     await booking_repo.release_seats_for_failed_payment(payment.booking_id)
@@ -330,6 +353,7 @@ async def payment_webhook(
             except Exception as e:
                 logger.error(f"Error releasing seats for failed payment: {str(e)}")
 
+    # Handle refund events (created or fully processed)
     elif event == "refund.created" or event == "refund.processed":
         refund_entity = event_payload.get("refund", {}).get("entity", {})
         payment_id = refund_entity.get("payment_id")
@@ -338,16 +362,19 @@ async def payment_webhook(
         status = "processed" if event == "refund.processed" else "pending"
 
         if payment_id:
-            # Find payment by Razorpay payment ID
+            # Log the refund event; full refund processing is not yet implemented
             try:
-                # This would need a new method to find by razorpay_payment_id
                 logger.info(f"Refund {status}: {refund_id} for payment {payment_id}")
             except Exception as e:
                 logger.error(f"Error processing refund webhook: {str(e)}")
 
+    # Acknowledge receipt of the webhook to Razorpay
     return {"status": "ok"}
 
 
+# --- POST /payments/booking/{booking_id}/cancel ---
+# Allows a user to cancel a pending (unpaid) booking and release the reserved seats.
+# Typically invoked when the user dismisses the payment modal or abandons checkout.
 @router.post(
     "/booking/{booking_id}/cancel",
     name="payments:cancel-pending-booking",
@@ -362,25 +389,28 @@ async def cancel_pending_booking(
     Cancel a pending booking and release its seats.
     Used when user cancels payment or payment modal is dismissed.
     """
+    # Retrieve the booking; raise 404 if it does not exist
     try:
         booking = await booking_repo.read_booking_by_id(booking_id)
     except EntityDoesNotExist:
         raise HTTPException(status_code=404, detail="Booking not found")
 
-    # Verify ownership
+    # Only the booking owner can cancel their own booking
     if booking.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Only cancel pending bookings
+    # Only bookings in "pending" status can be cancelled; confirmed/paid bookings cannot
     if booking.status != "pending":
         raise HTTPException(status_code=400, detail=f"Cannot cancel booking with status '{booking.status}'")
 
-    # Release seats
+    # Release the seats that were held for this booking back into availability
     await booking_repo.release_seats_for_failed_payment(booking_id)
 
     return {"success": True, "message": "Booking cancelled and seats released"}
 
 
+# --- GET /payments/booking/{booking_id}/status ---
+# Returns the current payment status for a given booking, including payment method and timestamps.
 @router.get(
     "/booking/{booking_id}/status",
     name="payments:get-payment-status",
@@ -393,7 +423,7 @@ async def get_payment_status_for_booking(
     payment_repo: PaymentCRUDRepository = Depends(get_repository(repo_type=PaymentCRUDRepository)),
 ):
     """Get payment status for a booking."""
-    # Verify booking ownership
+    # Verify the booking exists and belongs to the current user
     try:
         booking = await booking_repo.read_booking_by_id(booking_id)
     except EntityDoesNotExist:
@@ -402,9 +432,10 @@ async def get_payment_status_for_booking(
     if booking.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Get payment
+    # Look up the associated payment record for this booking
     payment = await payment_repo.read_payment_by_booking_id(booking_id)
 
+    # If no payment record exists, return the booking-level payment status only
     if not payment:
         return {
             "booking_id": booking_id,
@@ -412,6 +443,7 @@ async def get_payment_status_for_booking(
             "payment": None,
         }
 
+    # Return both booking-level and payment-level details
     return {
         "booking_id": booking_id,
         "payment_status": booking.payment_status,

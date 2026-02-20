@@ -1,3 +1,18 @@
+/*
+ * Profile page: allows authenticated users to view and edit their profile information,
+ * manage email notification preferences, and see account verification status.
+ *
+ * Key features:
+ *   - Displays user avatar (first letter), username, email, full name, phone, and join date.
+ *   - Inline editing of full name and phone number via the authApi.updateProfile endpoint.
+ *   - Notification preferences (booking confirmations, payment updates, ticket delivery,
+ *     event reminders, event updates, marketing) with individual toggle switches.
+ *   - Quick links to My Tickets, Wishlist, and Settings pages.
+ *   - Account status indicators for email verification, phone verification, and active status.
+ *
+ * Requires authentication; redirects to /login if not authenticated.
+ */
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -29,11 +44,13 @@ export default function ProfilePage() {
   const isAuthenticated = useIsAuthenticated();
   const { setUser } = useAuthStore();
 
+  // Profile editing state
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Editable form fields (only fullName and phone are editable)
   const [formData, setFormData] = useState({
     fullName: "",
     phone: "",
@@ -42,8 +59,10 @@ export default function ProfilePage() {
   // Notification preferences state
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences | null>(null);
   const [notifLoading, setNotifLoading] = useState(false);
+  // Tracks which specific notification preference is currently being toggled
   const [notifUpdating, setNotifUpdating] = useState<string | null>(null);
 
+  // Fetch notification preferences from the API
   const fetchNotificationPrefs = useCallback(async () => {
     setNotifLoading(true);
     try {
@@ -56,6 +75,7 @@ export default function ProfilePage() {
     }
   }, []);
 
+  // On mount: redirect if not authenticated, otherwise populate form and fetch preferences
   useEffect(() => {
     if (!isAuthenticated) {
       router.push("/login?redirect=/profile");
@@ -70,6 +90,7 @@ export default function ProfilePage() {
     }
   }, [isAuthenticated, user, router, fetchNotificationPrefs]);
 
+  // Toggle a single notification preference on/off via the API
   const handleNotifToggle = async (key: keyof NotificationPreferences) => {
     if (!notifPrefs || notifUpdating) return;
 
@@ -86,11 +107,13 @@ export default function ProfilePage() {
     }
   };
 
+  // Generic input change handler for editable form fields
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Save updated profile fields to the backend
   const handleSave = async () => {
     setIsLoading(true);
     setError(null);
@@ -104,6 +127,7 @@ export default function ProfilePage() {
       setUser(updatedUser);
       setIsEditing(false);
       setSuccess("Profile updated successfully");
+      // Auto-dismiss success message after 3 seconds
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update profile");
@@ -112,6 +136,7 @@ export default function ProfilePage() {
     }
   };
 
+  // Cancel editing and revert form fields to current user data
   const handleCancel = () => {
     if (user) {
       setFormData({
@@ -123,6 +148,7 @@ export default function ProfilePage() {
     setError(null);
   };
 
+  // Loading state while user data is not yet available
   if (!user) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -159,11 +185,12 @@ export default function ProfilePage() {
         )}
 
         <div className="grid gap-6 md:grid-cols-3">
-          {/* Profile Card */}
+          {/* Profile Card: avatar, editable fields, and read-only info */}
           <div className="md:col-span-2">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Profile Information</CardTitle>
+                {/* Toggle between view and edit modes */}
                 {!isEditing ? (
                   <Button
                     variant="outline"
@@ -207,6 +234,7 @@ export default function ProfilePage() {
                       {user.fullName || user.username}
                     </h3>
                     <p className="text-foreground-muted">@{user.username}</p>
+                    {/* Admin badge (if applicable) */}
                     {user.role === "admin" && (
                       <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/20 text-primary">
                         <Shield className="h-3 w-3" />
@@ -216,9 +244,10 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                {/* Form Fields */}
+                {/* Form Fields: read-only username/email, editable fullName/phone */}
                 <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
+                    {/* Username (read-only) */}
                     <div>
                       <label className="block text-sm font-medium text-foreground-muted mb-1.5">
                         Username
@@ -229,6 +258,7 @@ export default function ProfilePage() {
                       </div>
                     </div>
 
+                    {/* Email (read-only, with verification checkmark) */}
                     <div>
                       <label className="block text-sm font-medium text-foreground-muted mb-1.5">
                         Email
@@ -243,6 +273,7 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
+                  {/* Editable fields: fullName and phone (or read-only when not editing) */}
                   <div className="grid gap-4 sm:grid-cols-2">
                     {isEditing ? (
                       <>
@@ -295,6 +326,7 @@ export default function ProfilePage() {
                     )}
                   </div>
 
+                  {/* Member since date (read-only) */}
                   <div>
                     <label className="block text-sm font-medium text-foreground-muted mb-1.5">
                       Member Since
@@ -311,8 +343,9 @@ export default function ProfilePage() {
             </Card>
           </div>
 
-          {/* Quick Links */}
+          {/* Sidebar: Quick Links and Account Status */}
           <div className="space-y-4">
+            {/* Quick navigation links */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Quick Links</CardTitle>
@@ -345,6 +378,7 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
 
+            {/* Account verification and status indicators */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Account Status</CardTitle>
@@ -391,7 +425,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Notification Preferences */}
+        {/* Notification Preferences: toggle switches for each email notification category */}
         <Card className="mt-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -461,6 +495,10 @@ export default function ProfilePage() {
   );
 }
 
+/*
+ * NotificationToggle: a reusable toggle switch component for notification preferences.
+ * Renders a label, description, and an accessible toggle button with a loading spinner.
+ */
 function NotificationToggle({
   label,
   description,

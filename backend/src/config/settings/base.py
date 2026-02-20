@@ -1,3 +1,5 @@
+# Base settings class -- defines all shared configuration values for the backend.
+# Environment-specific subclasses (dev, staging, prod) override selected fields.
 import logging
 import pathlib
 
@@ -5,16 +7,19 @@ import decouple
 import pydantic
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Resolve the project root directory (four levels up from this file) to locate the .env file
 ROOT_DIR: pathlib.Path = pathlib.Path(__file__).parent.parent.parent.parent.parent.resolve()
 
 
 class BackendBaseSettings(BaseSettings):
+    # --- General application metadata ---
     TITLE: str = "DAPSQL FARN-Stack Template Application"
     VERSION: str = "0.1.0"
     TIMEZONE: str = "UTC"
     DESCRIPTION: str | None = None
     DEBUG: bool = False
 
+    # --- Server configuration (loaded from environment variables) ---
     SERVER_HOST: str = decouple.config("BACKEND_SERVER_HOST", cast=str)  # type: ignore
     SERVER_PORT: int = decouple.config("BACKEND_SERVER_PORT", cast=int)  # type: ignore
     SERVER_WORKERS: int = decouple.config("BACKEND_SERVER_WORKERS", cast=int)  # type: ignore
@@ -24,6 +29,7 @@ class BackendBaseSettings(BaseSettings):
     REDOC_URL: str = "/redoc"
     OPENAPI_PREFIX: str = ""
 
+    # --- PostgreSQL database connection settings ---
     DB_POSTGRES_HOST: str = decouple.config("POSTGRES_HOST", cast=str)  # type: ignore
     DB_MAX_POOL_CON: int = decouple.config("DB_MAX_POOL_CON", cast=int)  # type: ignore
     DB_POSTGRES_NAME: str = decouple.config("POSTGRES_DB", cast=str)  # type: ignore
@@ -35,10 +41,12 @@ class BackendBaseSettings(BaseSettings):
     DB_TIMEOUT: int = decouple.config("DB_TIMEOUT", cast=int)  # type: ignore
     DB_POSTGRES_USERNAME: str = decouple.config("POSTGRES_USERNAME", cast=str)  # type: ignore
 
+    # --- Database behaviour flags ---
     IS_DB_ECHO_LOG: bool = decouple.config("IS_DB_ECHO_LOG", cast=bool)  # type: ignore
     IS_DB_FORCE_ROLLBACK: bool = decouple.config("IS_DB_FORCE_ROLLBACK", cast=bool)  # type: ignore
     IS_DB_EXPIRE_ON_COMMIT: bool = decouple.config("IS_DB_EXPIRE_ON_COMMIT", cast=bool)  # type: ignore
 
+    # --- Authentication and JWT token settings ---
     API_TOKEN: str = decouple.config("API_TOKEN", cast=str)  # type: ignore
     AUTH_TOKEN: str = decouple.config("AUTH_TOKEN", cast=str)  # type: ignore
     JWT_TOKEN_PREFIX: str = decouple.config("JWT_TOKEN_PREFIX", cast=str)  # type: ignore
@@ -47,8 +55,10 @@ class BackendBaseSettings(BaseSettings):
     JWT_MIN: int = decouple.config("JWT_MIN", cast=int)  # type: ignore
     JWT_HOUR: int = decouple.config("JWT_HOUR", cast=int)  # type: ignore
     JWT_DAY: int = decouple.config("JWT_DAY", cast=int)  # type: ignore
+    # Total JWT expiration time computed as the product of minutes, hours, and days
     JWT_ACCESS_TOKEN_EXPIRATION_TIME: int = JWT_MIN * JWT_HOUR * JWT_DAY
 
+    # --- CORS (Cross-Origin Resource Sharing) settings ---
     IS_ALLOWED_CREDENTIALS: bool = decouple.config("IS_ALLOWED_CREDENTIALS", cast=bool)  # type: ignore
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:3000",  # React default port
@@ -63,33 +73,35 @@ class BackendBaseSettings(BaseSettings):
     ALLOWED_METHODS: list[str] = ["*"]
     ALLOWED_HEADERS: list[str] = ["*"]
 
+    # --- Logging configuration ---
     LOGGING_LEVEL: int = logging.INFO
     LOGGERS: tuple[str, str] = ("uvicorn.asgi", "uvicorn.access")
 
+    # --- Password hashing and JWT algorithm settings ---
     HASHING_ALGORITHM_LAYER_1: str = decouple.config("HASHING_ALGORITHM_LAYER_1", cast=str)  # type: ignore
     HASHING_ALGORITHM_LAYER_2: str = decouple.config("HASHING_ALGORITHM_LAYER_2", cast=str)  # type: ignore
     HASHING_SALT: str = decouple.config("HASHING_SALT", cast=str)  # type: ignore
     JWT_ALGORITHM: str = decouple.config("JWT_ALGORITHM", cast=str)  # type: ignore
 
-    # Admin Configuration
+    # --- Admin Configuration ---
     ADMIN_EMAIL: str = decouple.config("ADMIN_EMAIL", default="admin@zoniq.com", cast=str)  # type: ignore
     ADMIN_PASSWORD: str = decouple.config("ADMIN_PASSWORD", default="admin123!", cast=str)  # type: ignore
     ADMIN_USERNAME: str = decouple.config("ADMIN_USERNAME", default="admin", cast=str)  # type: ignore
 
-    # OTP Configuration
+    # --- OTP (One-Time Password) Configuration ---
     OTP_EXPIRY_MINUTES: int = decouple.config("OTP_EXPIRY_MINUTES", default=10, cast=int)  # type: ignore
     OTP_LENGTH: int = decouple.config("OTP_LENGTH", default=6, cast=int)  # type: ignore
 
-    # MSG91 Configuration
+    # --- MSG91 SMS gateway Configuration ---
     MSG91_AUTH_KEY: str = decouple.config("MSG91_AUTH_KEY", default="", cast=str)  # type: ignore
     MSG91_OTP_TEMPLATE_ID: str = decouple.config("MSG91_OTP_TEMPLATE_ID", default="", cast=str)  # type: ignore
 
-    # Razorpay Configuration
+    # --- Razorpay payment gateway Configuration ---
     RAZORPAY_KEY_ID: str = decouple.config("RAZORPAY_KEY_ID", default="", cast=str)  # type: ignore
     RAZORPAY_KEY_SECRET: str = decouple.config("RAZORPAY_KEY_SECRET", default="", cast=str)  # type: ignore
     RAZORPAY_WEBHOOK_SECRET: str = decouple.config("RAZORPAY_WEBHOOK_SECRET", default="", cast=str)  # type: ignore
 
-    # Email/SMTP Configuration
+    # --- Email/SMTP Configuration ---
     SMTP_HOST: str = decouple.config("SMTP_HOST", default="smtp.gmail.com", cast=str)  # type: ignore
     SMTP_PORT: int = decouple.config("SMTP_PORT", default=587, cast=int)  # type: ignore
     SMTP_USERNAME: str = decouple.config("SMTP_USERNAME", default="", cast=str)  # type: ignore
@@ -98,9 +110,10 @@ class BackendBaseSettings(BaseSettings):
     FROM_EMAIL: str = decouple.config("FROM_EMAIL", default="noreply@zoniq.com", cast=str)  # type: ignore
     FROM_NAME: str = decouple.config("FROM_NAME", default="ZONIQ", cast=str)  # type: ignore
 
-    # Frontend URL for email links
+    # --- Frontend URL used for constructing links in outbound emails ---
     FRONTEND_URL: str = decouple.config("FRONTEND_URL", default="http://localhost:3000", cast=str)  # type: ignore
 
+    # Pydantic settings model configuration: reads from .env, enforces case-sensitive keys
     model_config = SettingsConfigDict(
         case_sensitive=True,
         env_file=f"{str(ROOT_DIR)}/.env",
@@ -113,6 +126,7 @@ class BackendBaseSettings(BaseSettings):
         """
         Set all `FastAPI` class' attributes with the custom values defined in `BackendBaseSettings`.
         """
+        # Return a dict that can be unpacked as keyword arguments to fastapi.FastAPI(...)
         return {
             "title": self.TITLE,
             "version": self.VERSION,

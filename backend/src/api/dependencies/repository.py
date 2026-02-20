@@ -1,3 +1,5 @@
+# Repository dependency factory -- creates a FastAPI dependency that instantiates
+# any CRUD repository subclass with an injected async database session
 import typing
 
 import fastapi
@@ -10,6 +12,9 @@ from src.api.dependencies.session import get_async_session
 from src.repository.crud.base import BaseCRUDRepository
 
 
+# Higher-order function: accepts a repository class and returns a FastAPI-compatible
+# dependency that creates an instance of that repository with the current DB session.
+# Usage in routes: account_repo: AccountCRUDRepository = Depends(get_repository(AccountCRUDRepository))
 def get_repository(
     repo_type: typing.Type[BaseCRUDRepository],
 ) -> typing.Callable[[SQLAlchemyAsyncSession], BaseCRUDRepository]:

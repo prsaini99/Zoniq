@@ -1,3 +1,4 @@
+# Authentication routes: signup, signin, email OTP login, and password reset flows
 import logging
 
 import fastapi
@@ -25,11 +26,13 @@ from src.utilities.exceptions.http.exc_400 import (
 
 logger = logging.getLogger(__name__)
 
+# All authentication routes are grouped under the /auth prefix
 router = fastapi.APIRouter(prefix="/auth", tags=["authentication"])
 
 
 def _build_account_response(account, access_token: str) -> AccountInResponse:
     """Helper to build account response with token"""
+    # Construct a standardized response that includes the JWT token alongside account details
     return AccountInResponse(
         id=account.id,
         authorized_account=AccountWithToken(
@@ -49,6 +52,10 @@ def _build_account_response(account, access_token: str) -> AccountInResponse:
     )
 
 
+# ==================== Traditional Signup/Signin ====================
+
+
+# POST /auth/signup - Register a new account using email + password + pre-verified email OTP
 @router.post(
     "/signup",
     name="auth:signup",
@@ -61,13 +68,14 @@ async def signup(
     otp_repo: OTPCRUDRepository = fastapi.Depends(get_repository(repo_type=OTPCRUDRepository)),
 ) -> AccountInResponse:
     """Register a new user account (requires email OTP verification)"""
-    # Verify email OTP code
+    # Step 1: Ensure the request includes an email OTP code for verification
     if not account_create.email_otp_code:
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_400_BAD_REQUEST,
             detail="Email verification code is required",
         )
 
+    # Step 2: Validate the OTP code against the database (must be unexpired and unused)
     otp = await otp_repo.get_valid_otp(
         code=account_create.email_otp_code,
         purpose="email_login",
@@ -80,7 +88,7 @@ async def signup(
             detail="Invalid or expired verification code",
         )
 
-    # Check username separately for specific error message
+    # Step 3: Check username uniqueness before creating the account
     try:
         await account_repo.is_username_taken(username=account_create.username)
     except EntityAlreadyExists:
@@ -89,7 +97,7 @@ async def signup(
             detail=f"Username '{account_create.username}' is already taken",
         )
 
-    # Check email separately for specific error message
+    # Step 4: Check email uniqueness before creating the account
     try:
         await account_repo.is_email_taken(email=account_create.email)
     except EntityAlreadyExists:
@@ -98,13 +106,14 @@ async def signup(
             detail=f"Email '{account_create.email}' is already registered",
         )
 
-    # Mark OTP as used after all validations pass
+    # Step 5: All validations passed; mark the OTP as consumed so it cannot be reused
     await otp_repo.mark_otp_as_used(otp_id=otp.id)
 
+    # Step 6: Persist the new account and generate a JWT access token
     new_account = await account_repo.create_account(account_create=account_create)
     access_token = jwt_generator.generate_access_token(account=new_account)
 
-    # Send welcome email via SMTP
+    # Step 7: Send a welcome email (non-blocking; failure is logged but does not break signup)
     try:
         await smtp_email_service.send_welcome(to_email=new_account.email, username=new_account.username)
     except Exception as e:
@@ -113,6 +122,7 @@ async def signup(
     return _build_account_response(new_account, access_token)
 
 
+# POST /auth/signin - Authenticate with username/email + password credentials
 @router.post(
     path="/signin",
     name="auth:signin",
@@ -124,29 +134,34 @@ async def signin(
     account_repo: AccountCRUDRepository = fastapi.Depends(get_repository(repo_type=AccountCRUDRepository)),
 ) -> AccountInResponse:
     """Sign in with username, email, and password"""
+    # Attempt password-based authentication; raises 400 on invalid credentials
     try:
         db_account = await account_repo.read_user_by_password_authentication(account_login=account_login)
 
     except Exception:
         raise await http_exc_400_credentials_bad_signin_request()
 
+    # Blocked accounts are forbidden from signing in
     if db_account.is_blocked:
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_403_FORBIDDEN,
             detail="Account is blocked",
         )
 
-    # Update last login and get refreshed account
+    # Record the login timestamp and refresh the account state
     db_account = await account_repo.update_last_login(account_id=db_account.id)
 
+    # Generate a fresh JWT for the authenticated session
     access_token = jwt_generator.generate_access_token(account=db_account)
 
     return _build_account_response(db_account, access_token)
 
 
 # ==================== Email OTP Authentication ====================
+# These endpoints enable passwordless login/signup via email one-time passwords
 
 
+# POST /auth/email-otp/send - Generate and send an OTP code to the given email address
 @router.post(
     "/email-otp/send",
     name="auth:email-otp-send",
@@ -158,11 +173,14 @@ async def send_email_otp(
     otp_repo: OTPCRUDRepository = fastapi.Depends(get_repository(repo_type=OTPCRUDRepository)),
 ) -> OTPSendResponse:
     """Send OTP to email address for login/signup."""
+    # Generate a fresh OTP code and compute its expiry timestamp
     code = otp_service.generate_otp()
     expires_at = otp_service.get_expiry_time()
 
+    # Invalidate any existing unused OTPs for this email to prevent confusion
     await otp_repo.invalidate_previous_otps(purpose="email_login", email=request.email)
 
+    # Store the new OTP in the database
     await otp_repo.create_otp(
         code=code,
         purpose="email_login",
@@ -170,6 +188,7 @@ async def send_email_otp(
         email=request.email,
     )
 
+    # Send the OTP via SMTP; raise 500 if delivery fails
     email_sent = await smtp_email_service.send_otp_email(
         to_email=request.email,
         code=code,
@@ -189,6 +208,7 @@ async def send_email_otp(
     )
 
 
+# POST /auth/email-otp/verify - Verify the OTP code and either log in or auto-register the user
 @router.post(
     "/email-otp/verify",
     name="auth:email-otp-verify",
@@ -201,6 +221,7 @@ async def verify_email_otp(
     otp_repo: OTPCRUDRepository = fastapi.Depends(get_repository(repo_type=OTPCRUDRepository)),
 ) -> AccountInResponse:
     """Verify email OTP and login or auto-register the user."""
+    # Validate the submitted OTP code against the database
     otp = await otp_repo.get_valid_otp(
         code=request.code,
         purpose="email_login",
@@ -213,47 +234,55 @@ async def verify_email_otp(
             detail="Invalid or expired verification code",
         )
 
+    # Mark the OTP as consumed so it cannot be reused
     await otp_repo.mark_otp_as_used(otp_id=otp.id)
 
+    # Attempt to find an existing account for this email
     try:
         db_account = await account_repo.read_account_by_email(email=request.email)
     except Exception:
         db_account = None
 
     if db_account:
-        # Existing user: login
+        # Existing user flow: verify email if needed, then log in
         if db_account.is_blocked:
             raise fastapi.HTTPException(
                 status_code=fastapi.status.HTTP_403_FORBIDDEN,
                 detail="Account is blocked",
             )
 
+        # If email was not previously verified, mark it as verified now
         if not db_account.is_verified:
             await account_repo.verify_email(account_id=db_account.id)
 
+        # Update last login timestamp
         db_account = await account_repo.update_last_login(account_id=db_account.id)
 
     else:
-        # New user: auto-register
+        # New user flow: auto-register with a generated unique username
         username = await account_repo.generate_unique_username(email=request.email)
         db_account = await account_repo.create_account_from_email_otp(
             email=request.email,
             username=username,
         )
 
+        # Send welcome email to the newly registered user (non-critical)
         try:
             await smtp_email_service.send_welcome(to_email=db_account.email, username=db_account.username)
         except Exception as e:
             logger.warning(f"Failed to send welcome email to {db_account.email}: {e}")
 
+    # Issue a JWT token for the authenticated session
     access_token = jwt_generator.generate_access_token(account=db_account)
 
     return _build_account_response(db_account, access_token)
 
 
 # ==================== Password Reset ====================
+# Two-step flow: request a reset OTP, then confirm the reset with the OTP + new password
 
 
+# POST /auth/forgot-password - Request a password reset OTP sent to the user's email
 @router.post(
     "/forgot-password",
     name="auth:forgot-password",
@@ -266,7 +295,7 @@ async def forgot_password(
     otp_repo: OTPCRUDRepository = fastapi.Depends(get_repository(repo_type=OTPCRUDRepository)),
 ) -> OTPSendResponse:
     """Request password reset OTP"""
-    # Check if user exists
+    # Look up the account by email; return a generic message regardless to prevent email enumeration
     try:
         account = await account_repo.read_account_by_email(email=request.email)
     except Exception:
@@ -282,7 +311,7 @@ async def forgot_password(
             expires_in_seconds=otp_service.get_expiry_seconds(),
         )
 
-    # Generate and send OTP
+    # Generate a password-reset OTP and invalidate any previous ones
     code = otp_service.generate_otp()
     expires_at = otp_service.get_expiry_time()
 
@@ -295,6 +324,7 @@ async def forgot_password(
         email=request.email,
     )
 
+    # Send the reset OTP via the mock email service
     await mock_email_service.send_password_reset(email=request.email, code=code)
 
     return OTPSendResponse(
@@ -303,6 +333,7 @@ async def forgot_password(
     )
 
 
+# POST /auth/reset-password - Confirm password reset with OTP code and set a new password
 @router.post(
     "/reset-password",
     name="auth:reset-password",
@@ -314,7 +345,7 @@ async def reset_password(
     otp_repo: OTPCRUDRepository = fastapi.Depends(get_repository(repo_type=OTPCRUDRepository)),
 ) -> dict:
     """Reset password using OTP"""
-    # Verify OTP
+    # Step 1: Verify the reset OTP is valid and not expired
     otp = await otp_repo.get_valid_otp(
         code=request.code,
         purpose="reset_password",
@@ -327,7 +358,7 @@ async def reset_password(
             detail="Invalid or expired OTP",
         )
 
-    # Get user
+    # Step 2: Confirm the account exists for this email
     account = await account_repo.read_account_by_email(email=request.email)
     if not account:
         raise fastapi.HTTPException(
@@ -335,10 +366,10 @@ async def reset_password(
             detail="User not found",
         )
 
-    # Mark OTP as used
+    # Step 3: Consume the OTP and update the password
     await otp_repo.mark_otp_as_used(otp_id=otp.id)
 
-    # Update password
+    # Persist the new hashed password
     await account_repo.update_password(account_id=account.id, new_password=request.new_password)
 
     return {"message": "Password reset successfully"}

@@ -1,3 +1,16 @@
+/**
+ * AdminAnalyticsPage - Displays detailed platform analytics and performance metrics.
+ *
+ * Features:
+ * - Key metric stat cards (revenue, bookings, users, tickets) with growth trend indicators.
+ * - A date-range selector (week/month/quarter) that re-fetches chart data on change.
+ * - A bar chart visualizing revenue over the selected period.
+ * - A ranked list of top-performing events by revenue.
+ * - Additional stat cards for active and completed events.
+ * - Period breakdowns for today, this week, and this month.
+ *
+ * Data is loaded from three parallel API calls: overview, top events, and revenue chart.
+ */
 "use client";
 
 import { useState, useEffect } from "react";
@@ -15,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { formatPrice } from "@/lib/utils";
 import api from "@/lib/api";
 
+// Shape of the analytics overview data returned by the API
 interface AnalyticsOverview {
   total_revenue: number;
   revenue_today: number;
@@ -40,6 +54,7 @@ interface AnalyticsOverview {
   tickets_sold_week: number;
 }
 
+// A single top-performing event entry
 interface TopEvent {
   id: number;
   title: string;
@@ -48,12 +63,17 @@ interface TopEvent {
   bookings: number;
 }
 
+// A single data point for the revenue bar chart
 interface RevenueDataPoint {
   date: string;
   revenue: number;
   bookings: number;
 }
 
+/**
+ * StatCard - Renders a single analytics KPI card with an optional
+ * growth percentage trend (up/down/neutral arrow + colored label).
+ */
 function StatCard({
   title,
   value,
@@ -89,6 +109,7 @@ function StatCard({
             <Icon className="h-6 w-6 text-primary" />
           </div>
         </div>
+        {/* Trend indicator: shows percentage change vs the prior period */}
         {trendValue !== undefined && (
           <div className="mt-4 flex items-center gap-1">
             {trend === "up" ? (
@@ -117,12 +138,15 @@ function StatCard({
 }
 
 export default function AdminAnalyticsPage() {
+  // Core analytics state
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [topEvents, setTopEvents] = useState<TopEvent[]>([]);
   const [revenueData, setRevenueData] = useState<RevenueDataPoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Selected date range filter; drives re-fetch via the useEffect dependency
   const [dateRange, setDateRange] = useState("week");
 
+  // Fetch analytics data whenever the dateRange changes
   useEffect(() => {
     const fetchAnalytics = async () => {
       setIsLoading(true);
@@ -146,6 +170,7 @@ export default function AdminAnalyticsPage() {
     fetchAnalytics();
   }, [dateRange]);
 
+  // Loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -154,6 +179,7 @@ export default function AdminAnalyticsPage() {
     );
   }
 
+  // Error / empty state
   if (!overview) {
     return (
       <div className="text-center py-12">
@@ -163,12 +189,12 @@ export default function AdminAnalyticsPage() {
     );
   }
 
-  // Calculate max for chart scaling
+  // Used to scale bar heights proportionally in the revenue chart
   const maxRevenue = Math.max(...revenueData.map((d) => d.revenue), 1);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Page header with date-range selector dropdown */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
@@ -187,7 +213,7 @@ export default function AdminAnalyticsPage() {
         </select>
       </div>
 
-      {/* Key Metrics */}
+      {/* Key Metrics row - 4 stat cards with growth trends */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Revenue"
@@ -225,9 +251,9 @@ export default function AdminAnalyticsPage() {
         />
       </div>
 
-      {/* Revenue Chart & Top Events */}
+      {/* Revenue Chart (bar chart) & Top Events (ranked list) */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Revenue Chart */}
+        {/* Revenue bar chart - each bar is proportionally scaled to maxRevenue */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Revenue Overview</CardTitle>
@@ -246,9 +272,11 @@ export default function AdminAnalyticsPage() {
                       className="flex-1 flex flex-col items-center gap-2"
                     >
                       <div className="w-full flex flex-col items-center">
+                        {/* Revenue label above each bar */}
                         <span className="text-xs text-foreground-muted mb-1">
                           {formatPrice(data.revenue)}
                         </span>
+                        {/* Bar element whose height is proportional to revenue */}
                         <div
                           className="w-full bg-primary rounded-t-sm transition-all duration-300"
                           style={{
@@ -259,6 +287,7 @@ export default function AdminAnalyticsPage() {
                           }}
                         />
                       </div>
+                      {/* Date label below each bar */}
                       <span className="text-xs text-foreground-muted truncate max-w-full">
                         {new Date(data.date).toLocaleDateString("en-US", {
                           month: "short",
@@ -273,7 +302,7 @@ export default function AdminAnalyticsPage() {
           </CardContent>
         </Card>
 
-        {/* Top Performing Events */}
+        {/* Top Performing Events - ranked list with numbered badges */}
         <Card>
           <CardHeader>
             <CardTitle>Top Events</CardTitle>
@@ -290,6 +319,7 @@ export default function AdminAnalyticsPage() {
                     key={event.id}
                     className="flex items-center gap-3 py-2 border-b border-border last:border-0"
                   >
+                    {/* Rank number badge */}
                     <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-bold">
                       {index + 1}
                     </div>
@@ -314,7 +344,7 @@ export default function AdminAnalyticsPage() {
         </Card>
       </div>
 
-      {/* Additional Stats */}
+      {/* Additional Stats - active and completed event counts */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardContent className="p-6">
@@ -348,7 +378,7 @@ export default function AdminAnalyticsPage() {
         </Card>
       </div>
 
-      {/* Period Stats Grid */}
+      {/* Period-specific Stats Grid: Today / This Week / This Month */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Today's Stats */}
         <Card>

@@ -1,9 +1,17 @@
+/*
+ * cart.ts — Zustand store for shopping cart state management.
+ * Tracks the active cart, item count, loading state, and errors.
+ * Provides actions to fetch, add/update/remove items, checkout, and clear the cart.
+ * This is a client-only store (no persistence) since cart data lives on the server.
+ */
+
 "use client";
 
 import { create } from "zustand";
 import { cartApi } from "@/lib/api";
 import type { Cart } from "@/types";
 
+// Shape of the cart store: state fields and action methods
 interface CartState {
     cart: Cart | null;
     cartCount: number;
@@ -24,11 +32,13 @@ interface CartState {
 }
 
 export const useCartStore = create<CartState>((set, get) => ({
+    // ---- Initial state ----
     cart: null,
     cartCount: 0,
     isLoading: false,
     error: null,
 
+    // Fetches the user's current active cart from the server
     fetchCurrentCart: async () => {
         set({ isLoading: true, error: null });
         try {
@@ -39,6 +49,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         }
     },
 
+    // Fetches or creates a cart scoped to a specific event
     fetchCart: async (eventId: number) => {
         set({ isLoading: true, error: null });
         try {
@@ -49,6 +60,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         }
     },
 
+    // Fetches only the cart item count (lightweight call, used for navbar badge)
     fetchCartCount: async () => {
         try {
             const count = await cartApi.getCount();
@@ -58,6 +70,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         }
     },
 
+    // Adds seats/tickets to the cart and updates local state with the returned cart
     addItem: async (data) => {
         set({ isLoading: true, error: null });
         try {
@@ -70,6 +83,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         }
     },
 
+    // Updates the quantity of a cart item by its ID
     updateItem: async (itemId: number, quantity: number) => {
         set({ isLoading: true, error: null });
         try {
@@ -80,6 +94,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         }
     },
 
+    // Removes a specific item from the cart by its ID
     removeItem: async (itemId: number) => {
         set({ isLoading: true, error: null });
         try {
@@ -90,6 +105,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         }
     },
 
+    // Converts the cart into a booking and returns the new booking ID
     checkout: async (data) => {
         set({ isLoading: true, error: null });
         try {
@@ -103,7 +119,10 @@ export const useCartStore = create<CartState>((set, get) => ({
         }
     },
 
+    // Clears cart from local state only (no server call)
     clearCart: () => set({ cart: null, cartCount: 0 }),
+
+    // Clears the cart on the server and resets local state; silently handles errors
     clearCartAsync: async () => {
         try {
             await cartApi.clear();
@@ -113,5 +132,7 @@ export const useCartStore = create<CartState>((set, get) => ({
             set({ cart: null, cartCount: 0 });
         }
     },
+
+    // Resets the error field
     clearError: () => set({ error: null }),
 }));

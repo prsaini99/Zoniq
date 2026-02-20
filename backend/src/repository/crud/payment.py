@@ -1,3 +1,8 @@
+# Payment CRUD repository -- manages payment records linked to bookings.
+# Integrates with Razorpay payment gateway lifecycle: creation, success capture,
+# failure handling, and refund processing. Also keeps the associated booking
+# status in sync with each payment state transition.
+
 import datetime
 
 import sqlalchemy
@@ -14,6 +19,8 @@ class PaymentCRUDRepository(BaseCRUDRepository):
     CRUD operations for Payment model.
     """
 
+    # Creates a new payment record in "created" status when a Razorpay order is initiated.
+    # The amount is stored in the smallest currency unit (e.g., paise for INR).
     async def create_payment(
         self,
         booking_id: int,
@@ -36,6 +43,7 @@ class PaymentCRUDRepository(BaseCRUDRepository):
         await self.async_session.refresh(payment)
         return payment
 
+    # Fetches a payment by its primary key. Raises EntityDoesNotExist if not found.
     async def read_payment_by_id(self, payment_id: int) -> Payment:
         """Get a payment by ID."""
         stmt = sqlalchemy.select(Payment).where(Payment.id == payment_id)
@@ -45,6 +53,8 @@ class PaymentCRUDRepository(BaseCRUDRepository):
             raise EntityDoesNotExist(f"Payment with id {payment_id} does not exist")
         return payment
 
+    # Fetches a payment by the Razorpay order ID. Used during webhook/callback
+    # processing to locate the corresponding payment record.
     async def read_payment_by_order_id(self, razorpay_order_id: str) -> Payment:
         """Get a payment by Razorpay order ID."""
         stmt = sqlalchemy.select(Payment).where(Payment.razorpay_order_id == razorpay_order_id)
@@ -54,6 +64,8 @@ class PaymentCRUDRepository(BaseCRUDRepository):
             raise EntityDoesNotExist(f"Payment with order_id {razorpay_order_id} does not exist")
         return payment
 
+    # Fetches the most recent payment for a given booking. Returns None if no
+    # payment has been created yet (unlike other read methods that raise).
     async def read_payment_by_booking_id(self, booking_id: int) -> Payment | None:
         """Get a payment by booking ID (may return None if no payment exists)."""
         stmt = (
@@ -64,6 +76,8 @@ class PaymentCRUDRepository(BaseCRUDRepository):
         result = await self.async_session.execute(stmt)
         return result.scalar_one_or_none()
 
+    # Returns paginated payment records for a user, ordered by most recent first.
+    # Also returns the total count for pagination metadata.
     async def read_payments_by_user(
         self,
         user_id: int,
@@ -94,6 +108,9 @@ class PaymentCRUDRepository(BaseCRUDRepository):
 
         return payments, total
 
+    # Updates payment record after successful Razorpay payment verification.
+    # Stores the Razorpay payment ID, signature, and payment method.
+    # Also transitions the associated booking to "confirmed" with payment_status "success".
     async def update_payment_success(
         self,
         razorpay_order_id: str,
@@ -104,13 +121,14 @@ class PaymentCRUDRepository(BaseCRUDRepository):
         """Update payment record after successful payment."""
         payment = await self.read_payment_by_order_id(razorpay_order_id)
 
+        # Store Razorpay verification details.
         payment.razorpay_payment_id = razorpay_payment_id
         payment.razorpay_signature = razorpay_signature
         payment.status = "captured"
         payment.method = method
         payment.paid_at = datetime.datetime.now(datetime.timezone.utc)
 
-        # Also update the booking
+        # Also update the booking to reflect successful payment.
         stmt = sqlalchemy.select(Booking).where(Booking.id == payment.booking_id)
         result = await self.async_session.execute(stmt)
         booking = result.scalar_one_or_none()
@@ -124,6 +142,9 @@ class PaymentCRUDRepository(BaseCRUDRepository):
         await self.async_session.refresh(payment)
         return payment
 
+    # Updates payment record after a failed payment attempt.
+    # Stores the error code and description from Razorpay for debugging.
+    # Also marks the associated booking's payment_status as "failed".
     async def update_payment_failed(
         self,
         razorpay_order_id: str,
@@ -151,6 +172,9 @@ class PaymentCRUDRepository(BaseCRUDRepository):
         await self.async_session.refresh(payment)
         return payment
 
+    # Records a refund on a payment. If the refund amount covers the full payment,
+    # the payment status is set to "refunded". Also updates the associated booking:
+    # full refunds set the booking to "refunded" status.
     async def update_payment_refund(
         self,
         payment_id: int,
@@ -166,6 +190,7 @@ class PaymentCRUDRepository(BaseCRUDRepository):
         payment.refund_status = refund_status
         payment.refunded_at = datetime.datetime.now(datetime.timezone.utc)
 
+        # If the refund amount covers the entire payment, mark as fully refunded.
         if refund_amount >= payment.amount:
             payment.status = "refunded"
 

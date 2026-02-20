@@ -1,8 +1,23 @@
+/**
+ * Card - A set of composable card sub-components for building content cards.
+ *
+ * Components:
+ * - Card: The outer container with rounded borders, background, and shadow.
+ *   Accepts an optional `hover` prop to enable lift-on-hover and gradient border effects.
+ * - CardHeader: Top section with vertical spacing, typically holds title and description.
+ * - CardTitle: Styled heading (h3) for the card.
+ * - CardDescription: Muted paragraph text beneath the title.
+ * - CardContent: Main body area with padding (no top padding to avoid double spacing).
+ * - CardFooter: Bottom section with horizontal flex layout.
+ *
+ * All components use React.forwardRef for ref forwarding and accept standard HTML attributes.
+ */
 "use client";
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+// Card wrapper - the `hover` prop adds interactive lift and gradient border styles
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & {
@@ -21,6 +36,7 @@ const Card = React.forwardRef<
 ));
 Card.displayName = "Card";
 
+// CardHeader - contains title and optional description with vertical spacing
 const CardHeader = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -33,6 +49,7 @@ const CardHeader = React.forwardRef<
 ));
 CardHeader.displayName = "CardHeader";
 
+// CardTitle - bold heading text for the card
 const CardTitle = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLHeadingElement>
@@ -48,6 +65,7 @@ const CardTitle = React.forwardRef<
 ));
 CardTitle.displayName = "CardTitle";
 
+// CardDescription - muted secondary text, typically used below CardTitle
 const CardDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
@@ -60,6 +78,7 @@ const CardDescription = React.forwardRef<
 ));
 CardDescription.displayName = "CardDescription";
 
+// CardContent - main content area; uses pt-0 to avoid double padding with CardHeader
 const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -68,6 +87,7 @@ const CardContent = React.forwardRef<
 ));
 CardContent.displayName = "CardContent";
 
+// CardFooter - bottom area with horizontal flex layout for actions or metadata
 const CardFooter = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>

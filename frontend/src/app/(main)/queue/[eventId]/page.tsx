@@ -1,3 +1,21 @@
+/*
+ * Queue Waiting Room page: implements the virtual queue experience for high-demand events.
+ *
+ * Flow:
+ *   1. On mount, loads event details and queue status via the API.
+ *   2. Checks if the user already has a position in the queue; if so, reconnects the WebSocket.
+ *      Otherwise, joins the queue (which opens a WebSocket for real-time position updates).
+ *   3. Displays the user's current position, people ahead, estimated wait time,
+ *      and overall queue stats (total in queue, currently being served).
+ *   4. Shows a WebSocket connection status indicator (connected / reconnecting).
+ *   5. When the user's turn arrives (canProceed=true), shows a "Select Tickets" CTA
+ *      with an expiry countdown timer.
+ *   6. The user can leave the queue (with confirmation dialog), which redirects them
+ *      back to the event page.
+ *
+ * Requires authentication; redirects to /login if not authenticated.
+ */
+
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -23,10 +41,13 @@ import type { EventDetail, QueueStatusResponse } from "@/types";
 export default function QueueWaitingRoom() {
     const router = useRouter();
     const params = useParams();
+    // Extract event ID from the dynamic route segment
     const eventId = parseInt(params.eventId as string, 10);
 
     const isAuthenticated = useIsAuthenticated();
+    // Real-time queue position from the queue store (updated via WebSocket)
     const position = useQueuePosition();
+    // WebSocket connection status
     const isConnected = useQueueConnected();
     const { joinQueue, leaveQueue, isConnecting, error, reset } = useQueueStore();
 
@@ -34,6 +55,7 @@ export default function QueueWaitingRoom() {
     const [queueStatus, setQueueStatus] = useState<QueueStatusResponse | null>(null);
     const [isLoadingEvent, setIsLoadingEvent] = useState(true);
     const [isLeaving, setIsLeaving] = useState(false);
+    // Countdown timer string (mm:ss) shown when the user reaches "processing" status
     const [expiryCountdown, setExpiryCountdown] = useState<string | null>(null);
 
     // Redirect if not authenticated
@@ -43,7 +65,7 @@ export default function QueueWaitingRoom() {
         }
     }, [isAuthenticated, router]);
 
-    // Load event details and queue status
+    // Load event details and queue status on mount
     useEffect(() => {
         const loadData = async () => {
             if (!eventId) return;
@@ -66,7 +88,7 @@ export default function QueueWaitingRoom() {
         loadData();
     }, [eventId]);
 
-    // Join queue on mount
+    // Join queue on mount: first check if user already has a position, then join or reconnect
     useEffect(() => {
         if (!eventId || !isAuthenticated) return;
 
@@ -102,7 +124,7 @@ export default function QueueWaitingRoom() {
         };
     }, [eventId, isAuthenticated, joinQueue]);
 
-    // Handle expiry countdown when processing
+    // Handle expiry countdown when user has "processing" status (their turn is active)
     useEffect(() => {
         if (!position?.expiresAt || position.status !== "processing") {
             setExpiryCountdown(null);
@@ -129,6 +151,7 @@ export default function QueueWaitingRoom() {
         return () => clearInterval(interval);
     }, [position?.expiresAt, position?.status]);
 
+    // Leave the queue after user confirmation, then redirect to the event page
     const handleLeaveQueue = useCallback(async () => {
         // Show confirmation dialog
         const confirmed = window.confirm(
@@ -149,12 +172,13 @@ export default function QueueWaitingRoom() {
         }
     }, [leaveQueue, reset, router, event?.slug, eventId]);
 
+    // Navigate to the event page with fromQueue=true to auto-open ticket selection
     const handleProceedToCheckout = useCallback(() => {
         // Pass query param to indicate user has queue access
         router.push(`/events/${event?.slug || eventId}?fromQueue=true`);
     }, [router, event?.slug, eventId]);
 
-    // Loading state
+    // Loading state while fetching event data or connecting to the queue
     if (isLoadingEvent || isConnecting) {
         return (
             <div className="container mx-auto px-4 py-20">
@@ -168,7 +192,7 @@ export default function QueueWaitingRoom() {
         );
     }
 
-    // Can proceed to checkout
+    // "It's Your Turn" view: shown when the user can proceed to ticket selection
     if (position?.canProceed) {
         return (
             <div className="container mx-auto px-4 py-20">
@@ -187,6 +211,7 @@ export default function QueueWaitingRoom() {
                         <span className="font-medium text-foreground">{event?.title}</span>
                     </p>
 
+                    {/* Countdown timer for how long the user has to complete checkout */}
                     {expiryCountdown && (
                         <div className="mb-8 flex items-center justify-center gap-2 text-amber-500">
                             <Clock className="h-5 w-5" />
@@ -208,6 +233,7 @@ export default function QueueWaitingRoom() {
         );
     }
 
+    // Main queue waiting room view
     return (
         <div className="container mx-auto px-4 py-12">
             <div className="mx-auto max-w-2xl">
@@ -226,7 +252,7 @@ export default function QueueWaitingRoom() {
                     </div>
                 )}
 
-                {/* Connection Status */}
+                {/* WebSocket Connection Status indicator */}
                 <div className="mb-6 flex items-center justify-center gap-2">
                     {isConnected ? (
                         <>
@@ -249,7 +275,7 @@ export default function QueueWaitingRoom() {
                     </div>
                 )}
 
-                {/* Queue Position Card */}
+                {/* Queue Position Card: the main waiting room UI */}
                 <div className="rounded-3xl border border-border bg-background-soft p-8 text-center shadow-xl">
                     <div className="mb-6">
                         <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-primary">
@@ -258,7 +284,7 @@ export default function QueueWaitingRoom() {
                         </div>
                     </div>
 
-                    {/* Position Display */}
+                    {/* Large position number display */}
                     <div className="mb-8">
                         <p className="text-sm uppercase tracking-wider text-foreground-muted">
                             Your Position
@@ -275,7 +301,7 @@ export default function QueueWaitingRoom() {
                         )}
                     </div>
 
-                    {/* Wait Time Estimate */}
+                    {/* Estimated wait time */}
                     {position?.estimatedWaitMinutes !== null && position?.estimatedWaitMinutes !== undefined && (
                         <div className="mb-8 rounded-xl bg-background p-4">
                             <div className="flex items-center justify-center gap-2 text-foreground-muted">
@@ -290,7 +316,7 @@ export default function QueueWaitingRoom() {
                         </div>
                     )}
 
-                    {/* Queue Stats */}
+                    {/* Queue Stats: total in queue and currently being served */}
                     {queueStatus && (
                         <div className="mb-8 grid grid-cols-2 gap-4">
                             <div className="rounded-xl bg-background p-4">
@@ -308,7 +334,7 @@ export default function QueueWaitingRoom() {
                         </div>
                     )}
 
-                    {/* Status Info */}
+                    {/* Status-specific informational message */}
                     <div className="mb-8 rounded-xl border border-primary/20 bg-primary/5 p-4">
                         <p className="text-sm text-foreground">
                             {position?.status === "waiting" ? (
@@ -327,7 +353,7 @@ export default function QueueWaitingRoom() {
                         </p>
                     </div>
 
-                    {/* Leave Queue Button */}
+                    {/* Leave Queue Button: user can exit (with confirmation) */}
                     <button
                         onClick={handleLeaveQueue}
                         disabled={isLeaving}
@@ -346,7 +372,7 @@ export default function QueueWaitingRoom() {
                     </button>
                 </div>
 
-                {/* Tips Section */}
+                {/* Tips Section: advice for users while they wait */}
                 <div className="mt-8 rounded-2xl border border-border bg-background-soft p-6">
                     <h3 className="mb-4 font-semibold text-foreground">Tips while you wait</h3>
                     <ul className="space-y-2 text-sm text-foreground-muted">

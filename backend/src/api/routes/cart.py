@@ -1,3 +1,6 @@
+# Cart routes: manage shopping cart for event ticket purchases
+# All endpoints require authentication (get_current_user dependency)
+# The cart holds items (seat selections) before they are converted into a booking at checkout
 import fastapi
 from fastapi import Depends, HTTPException
 from decimal import Decimal
@@ -18,6 +21,7 @@ from src.models.schemas.booking import BookingDetailResponse, BookingItemRespons
 from src.repository.crud.cart import CartCRUDRepository
 from src.repository.crud.booking import BookingCRUDRepository
 
+# All cart routes are grouped under the /cart prefix
 router = fastapi.APIRouter(prefix="/cart", tags=["cart"])
 
 
@@ -26,6 +30,7 @@ def _build_cart_response(cart) -> CartResponse:
     items = []
     subtotal = Decimal("0")
 
+    # Iterate over each cart item, compute per-item subtotals, and accumulate the cart subtotal
     for item in cart.items:
         item_subtotal = Decimal(str(item.unit_price)) * item.quantity
         subtotal += item_subtotal
@@ -41,7 +46,9 @@ def _build_cart_response(cart) -> CartResponse:
             locked_until=item.locked_until,
         ))
 
+    # Total equals subtotal (no discount/tax logic at cart level)
     total = subtotal
+    # Total ticket count across all items
     item_count = sum(item.quantity for item in cart.items)
 
     return CartResponse(
@@ -60,6 +67,7 @@ def _build_cart_response(cart) -> CartResponse:
     )
 
 
+# POST /cart - Get the user's existing active cart for an event, or create a new one
 @router.post(
     "",
     name="cart:get-or-create",
@@ -72,6 +80,7 @@ async def get_or_create_cart(
     cart_repo: CartCRUDRepository = Depends(get_repository(repo_type=CartCRUDRepository)),
 ) -> CartResponse:
     """Get or create an active cart for the user and event."""
+    # Idempotent: returns existing active cart or creates a fresh one
     cart = await cart_repo.get_or_create_cart(
         user_id=current_user.id,
         event_id=cart_data.event_id,
@@ -79,6 +88,7 @@ async def get_or_create_cart(
     return _build_cart_response(cart)
 
 
+# POST /cart/items - Add a seat category selection to the cart
 @router.post(
     "/items",
     name="cart:add-item",
@@ -91,12 +101,13 @@ async def add_item_to_cart(
     cart_repo: CartCRUDRepository = Depends(get_repository(repo_type=CartCRUDRepository)),
 ) -> CartResponse:
     """Add an item to the cart. Creates a cart if none exists."""
-    # Get or create cart
+    # Ensure the user has an active cart for this event
     cart = await cart_repo.get_or_create_cart(
         user_id=current_user.id,
         event_id=item_data.event_id,
     )
 
+    # Add the item; this may lock seats and validate availability
     try:
         cart = await cart_repo.add_item(
             cart_id=cart.id,
@@ -104,11 +115,13 @@ async def add_item_to_cart(
             user_id=current_user.id,
         )
     except ValueError as e:
+        # ValueError indicates a business rule violation (e.g., seat unavailable, max tickets exceeded)
         raise HTTPException(status_code=400, detail=str(e))
 
     return _build_cart_response(cart)
 
 
+# PATCH /cart/items/{item_id} - Update the quantity of an existing cart item
 @router.patch(
     "/items/{item_id}",
     name="cart:update-item",
@@ -122,11 +135,12 @@ async def update_cart_item(
     cart_repo: CartCRUDRepository = Depends(get_repository(repo_type=CartCRUDRepository)),
 ) -> CartResponse:
     """Update quantity of a cart item."""
-    # Find user's active cart containing this item
+    # Look up the user's current active cart (not tied to a specific event here)
     cart = await cart_repo.get_user_active_cart(user_id=current_user.id)
     if not cart:
         raise HTTPException(status_code=404, detail="No active cart found")
 
+    # Apply the quantity update; may re-validate seat locks
     try:
         cart = await cart_repo.update_item(
             cart_id=cart.id,
@@ -140,6 +154,7 @@ async def update_cart_item(
     return _build_cart_response(cart)
 
 
+# DELETE /cart/items/{item_id} - Remove an item from the cart and release its locked seats
 @router.delete(
     "/items/{item_id}",
     name="cart:remove-item",
@@ -156,6 +171,7 @@ async def remove_cart_item(
     if not cart:
         raise HTTPException(status_code=404, detail="No active cart found")
 
+    # Remove the item and release any seat locks held by it
     try:
         cart = await cart_repo.remove_item(
             cart_id=cart.id,
@@ -168,6 +184,7 @@ async def remove_cart_item(
     return _build_cart_response(cart)
 
 
+# GET /cart/validate - Pre-checkout validation to ensure all cart items are still valid
 @router.get(
     "/validate",
     name="cart:validate",
@@ -183,10 +200,12 @@ async def validate_cart(
     if not cart:
         return CartValidationResponse(is_valid=False, errors=["No active cart found"])
 
+    # Check seat locks, availability, pricing, and business rules
     is_valid, errors, warnings = await cart_repo.validate_cart(cart_id=cart.id)
     return CartValidationResponse(is_valid=is_valid, errors=errors, warnings=warnings)
 
 
+# POST /cart/checkout - Convert the cart into a confirmed booking
 @router.post(
     "/checkout",
     name="cart:checkout",
@@ -204,12 +223,13 @@ async def checkout(
     if not cart:
         raise HTTPException(status_code=404, detail="No active cart found")
 
-    # Validate first
+    # Step 1: Validate the cart before proceeding to ensure seats are still available
     is_valid, errors, warnings = await cart_repo.validate_cart(cart_id=cart.id)
     if not is_valid:
         raise HTTPException(status_code=400, detail=f"Cart validation failed: {'; '.join(errors)}")
 
-    # Create booking
+    # Step 2: Atomically create a booking from the cart contents
+    # Uses checkout contact info or falls back to the user's account email/phone
     try:
         booking = await booking_repo.create_booking_from_cart(
             cart=cart,
@@ -220,7 +240,7 @@ async def checkout(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Checkout failed: {str(e)}")
 
-    # Build response
+    # Step 3: Build the booking detail response with event and venue information
     event_info = None
     if booking.event:
         venue_name = None
@@ -240,6 +260,7 @@ async def checkout(
             venue_city=venue_city,
         )
 
+    # Map each booking item (ticket) to its response schema
     items = [
         BookingItemResponse(
             id=item.id,
@@ -277,6 +298,7 @@ async def checkout(
     )
 
 
+# GET /cart/current - Retrieve the user's active cart without creating a new one
 @router.get(
     "/current",
     name="cart:current",
@@ -288,12 +310,14 @@ async def get_current_cart(
     cart_repo: CartCRUDRepository = Depends(get_repository(repo_type=CartCRUDRepository)),
 ) -> CartResponse | None:
     """Get the user's current active cart (if any)."""
+    # Returns None if no active cart exists (does not create one)
     cart = await cart_repo.get_user_active_cart(user_id=current_user.id)
     if not cart:
         return None
     return _build_cart_response(cart)
 
 
+# DELETE /cart/clear - Abandon the user's active cart and release all locked seats
 @router.delete(
     "/clear",
     name="cart:clear",
@@ -306,10 +330,12 @@ async def clear_cart(
     """Clear/abandon the user's current active cart and release any locked seats."""
     cart = await cart_repo.get_user_active_cart(user_id=current_user.id)
     if cart:
+        # Mark the cart as abandoned and release all seat locks
         await cart_repo.abandon_cart(cart_id=cart.id, user_id=current_user.id)
     return {"success": True, "message": "Cart cleared"}
 
 
+# GET /cart/count - Return the total number of items across the user's active carts
 @router.get(
     "/count",
     name="cart:count",
@@ -320,5 +346,6 @@ async def get_cart_count(
     cart_repo: CartCRUDRepository = Depends(get_repository(repo_type=CartCRUDRepository)),
 ) -> dict:
     """Get the total item count in the user's active carts."""
+    # Useful for displaying a badge count in the UI header
     count = await cart_repo.get_cart_count(user_id=current_user.id)
     return {"count": count}

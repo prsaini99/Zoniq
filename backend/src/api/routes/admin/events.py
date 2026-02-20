@@ -1,6 +1,10 @@
 """
 Admin Event Management APIs
 """
+# Admin event management routes -- provides full CRUD for events and their seat
+# categories. Includes lifecycle management (publish, cancel, reactivate) and
+# audit logging for every mutating action. All endpoints require admin authentication.
+
 import datetime
 from typing import Annotated
 
@@ -30,8 +34,11 @@ from src.services.admin_log_service import AdminLogService
 router = fastapi.APIRouter(prefix="/events", tags=["admin-events"])
 
 
+# Helper to convert an Event ORM model into the public-facing EventResponse schema.
+# Includes a compact venue representation if the event has an associated venue.
 def _build_event_response(event) -> EventResponse:
     """Build EventResponse from Event model"""
+    # Build compact venue info if a venue relationship is loaded
     venue = None
     if event.venue:
         venue = VenueCompact(
@@ -68,8 +75,12 @@ def _build_event_response(event) -> EventResponse:
     )
 
 
+# Helper to convert an Event ORM model into the admin-only EventAdminResponse schema.
+# This includes all fields from EventResponse plus sensitive/internal fields like
+# organizer_contact, terms_and_conditions, metadata, and audit timestamps.
 def _build_event_admin_response(event) -> EventAdminResponse:
     """Build EventAdminResponse from Event model"""
+    # Build compact venue info if a venue relationship is loaded
     venue = None
     if event.venue:
         venue = VenueCompact(
@@ -117,6 +128,9 @@ def _build_event_admin_response(event) -> EventAdminResponse:
 # ==================== Event CRUD ====================
 
 
+# GET /admin/events -- List all events with optional filtering by status,
+# category, city, search term, and date range. Admin sees all events
+# including drafts and cancelled events (published_only=False).
 @router.get(
     "",
     name="admin:events:list",
@@ -138,6 +152,7 @@ async def list_events(
     ),
 ) -> EventListResponse:
     """List all events with filters (Admin only - includes draft/cancelled)"""
+    # Fetch events with all provided filters; published_only=False lets admin see all statuses
     events, total = await event_repo.read_events(
         page=page,
         page_size=page_size,
@@ -158,6 +173,9 @@ async def list_events(
     )
 
 
+# POST /admin/events -- Create a new event. New events are always created
+# in draft status. The creating admin's ID is recorded. The action is
+# logged to the admin activity audit trail.
 @router.post(
     "",
     name="admin:events:create",
@@ -176,6 +194,7 @@ async def create_event(
     ),
 ) -> EventAdminResponse:
     """Create a new event (Admin only). Events are created as draft."""
+    # Persist the new event with the admin's ID as the creator
     event = await event_repo.create_event(
         event_create=event_create, created_by=admin.id
     )
@@ -193,6 +212,8 @@ async def create_event(
     return _build_event_admin_response(event)
 
 
+# GET /admin/events/stats -- Returns aggregate event statistics such as
+# counts by status, category breakdown, and upcoming event counts.
 @router.get(
     "/stats",
     name="admin:events:stats",
@@ -209,6 +230,8 @@ async def get_event_stats(
     return await event_repo.get_event_stats()
 
 
+# GET /admin/events/{event_id} -- Retrieve full event details by ID.
+# Returns the admin-enriched response including internal fields.
 @router.get(
     "/{event_id}",
     name="admin:events:get",
@@ -227,6 +250,9 @@ async def get_event(
     return _build_event_admin_response(event)
 
 
+# PATCH /admin/events/{event_id} -- Partially update an event. Only the
+# fields provided in the request body are updated (exclude_unset).
+# Changes are audit-logged with the specific fields that were modified.
 @router.patch(
     "/{event_id}",
     name="admin:events:update",
@@ -261,6 +287,8 @@ async def update_event(
     return _build_event_admin_response(event)
 
 
+# POST /admin/events/{event_id}/publish -- Transition an event from draft
+# to published status, making it visible to end users on the platform.
 @router.post(
     "/{event_id}/publish",
     name="admin:events:publish",
@@ -294,6 +322,9 @@ async def publish_event(
     return _build_event_admin_response(event)
 
 
+# POST /admin/events/{event_id}/cancel -- Cancel an event. This marks the
+# event as cancelled, preventing further bookings. Existing bookings may
+# need to be handled separately.
 @router.post(
     "/{event_id}/cancel",
     name="admin:events:cancel",
@@ -327,6 +358,9 @@ async def cancel_event(
     return _build_event_admin_response(event)
 
 
+# POST /admin/events/{event_id}/reactivate -- Reactivate a previously
+# cancelled event by moving it back to draft status. The event must be
+# published again to become visible to users.
 @router.post(
     "/{event_id}/reactivate",
     name="admin:events:reactivate",
@@ -360,6 +394,10 @@ async def reactivate_event(
     return _build_event_admin_response(event)
 
 
+# DELETE /admin/events/{event_id} -- Permanently delete an event. Only
+# draft events can be deleted; published or cancelled events must first
+# be handled through their respective lifecycle transitions. The event
+# title is captured before deletion for the audit log entry.
 @router.delete(
     "/{event_id}",
     name="admin:events:delete",
@@ -399,6 +437,9 @@ async def delete_event(
 # ==================== Seat Categories ====================
 
 
+# GET /admin/events/{event_id}/categories -- List all seat categories
+# for a given event. Unlike the public endpoint, this returns inactive
+# categories as well (active_only=False).
 @router.get(
     "/{event_id}/categories",
     name="admin:events:categories:list",
@@ -435,6 +476,9 @@ async def list_event_categories(
     ]
 
 
+# POST /admin/events/{event_id}/categories -- Create a new seat category
+# for an event (e.g. VIP, General Admission). After creation, the event's
+# aggregate seat counts are recalculated to stay in sync.
 @router.post(
     "/{event_id}/categories",
     name="admin:events:categories:create",
@@ -460,11 +504,13 @@ async def create_event_category(
     # Verify event exists
     event = await event_repo.read_event_by_id(event_id=event_id)
 
+    # Persist the new seat category linked to this event
     category = await category_repo.create_category(
         event_id=event_id, category_create=category_create
     )
 
-    # Update event seat counts
+    # Update event seat counts -- recalculate totals from all categories
+    # so the event's total_seats and available_seats stay accurate
     total_seats, available_seats = await category_repo.get_total_seats_for_event(event_id)
     await event_repo.update_seat_counts(event_id, total_seats, available_seats)
 
@@ -497,6 +543,9 @@ async def create_event_category(
     )
 
 
+# PATCH /admin/events/categories/{category_id} -- Partially update a seat
+# category. If total_seats is changed, the parent event's aggregate seat
+# counts are recalculated to maintain consistency.
 @router.patch(
     "/categories/{category_id}",
     name="admin:events:categories:update",
@@ -555,6 +604,9 @@ async def update_category(
     )
 
 
+# DELETE /admin/events/categories/{category_id} -- Delete a seat category.
+# Only allowed if no seats in this category have been sold. After deletion,
+# the parent event's aggregate seat counts are recalculated.
 @router.delete(
     "/categories/{category_id}",
     name="admin:events:categories:delete",

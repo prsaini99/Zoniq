@@ -1,3 +1,15 @@
+/*
+ * Cart page: displays the user's current ticket cart for a single event.
+ *
+ * Key features:
+ *   - Requires authentication; redirects unauthenticated users to /login.
+ *   - Fetches the current cart from the API on mount via the cart store.
+ *   - Shows a countdown timer for cart expiry (seats are held temporarily).
+ *   - Allows adjusting ticket quantity (increment/decrement) and removing items.
+ *   - Displays an order summary sidebar with subtotal, total, and checkout link.
+ *   - Shows appropriate empty state when the cart has no items.
+ */
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -24,8 +36,10 @@ export default function CartPage() {
     const router = useRouter();
     const isAuthenticated = useIsAuthenticated();
     const { cart, isLoading, error, updateItem, removeItem, clearError, fetchCurrentCart } = useCartStore();
+    // Tracks the remaining time before the cart expires (formatted as mm:ss)
     const [timeLeft, setTimeLeft] = useState("");
 
+    // Redirect unauthenticated users to login, otherwise fetch the cart
     useEffect(() => {
         if (!isAuthenticated) {
             router.push("/login?redirect=/cart");
@@ -35,7 +49,7 @@ export default function CartPage() {
         fetchCurrentCart();
     }, [isAuthenticated, router, fetchCurrentCart]);
 
-    // Timer for cart expiry
+    // Timer for cart expiry: updates every second with remaining time
     useEffect(() => {
         if (!cart?.expiresAt) return;
 
@@ -71,6 +85,7 @@ export default function CartPage() {
         );
     }
 
+    // Empty cart state: prompt the user to browse events
     if (!cart || cart.items.length === 0) {
         return (
             <div className="container mx-auto px-4 py-20">
@@ -96,7 +111,7 @@ export default function CartPage() {
 
     return (
         <div className="container mx-auto px-4 py-8">
-            {/* Header */}
+            {/* Header with event title and expiry countdown */}
             <div className="mb-8 flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold text-foreground">Your Cart</h1>
@@ -106,6 +121,7 @@ export default function CartPage() {
                         </p>
                     )}
                 </div>
+                {/* Cart expiry timer badge */}
                 {timeLeft && timeLeft !== "Expired" && (
                     <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-4 py-2 text-amber-500">
                         <Clock className="h-4 w-4" />
@@ -114,6 +130,7 @@ export default function CartPage() {
                 )}
             </div>
 
+            {/* Dismissible error banner */}
             {error && (
                 <div className="mb-6 flex items-center gap-3 rounded-xl bg-red-500/10 p-4 text-red-500">
                     <AlertCircle className="h-5 w-5 flex-shrink-0" />
@@ -125,7 +142,7 @@ export default function CartPage() {
             )}
 
             <div className="grid gap-8 lg:grid-cols-3">
-                {/* Cart Items */}
+                {/* Cart Items list (left column) */}
                 <div className="lg:col-span-2 space-y-4">
                     {cart.items.map((item) => (
                         <div
@@ -134,6 +151,7 @@ export default function CartPage() {
                         >
                             <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1">
+                                    {/* Category color dot and name */}
                                     <div className="flex items-center gap-3 mb-3">
                                         <div
                                             className="h-4 w-4 rounded-full ring-2 ring-offset-2 ring-offset-background-soft"
@@ -144,6 +162,7 @@ export default function CartPage() {
                                         </h3>
                                     </div>
 
+                                    {/* Per-ticket price and assigned seat count */}
                                     <div className="flex items-center gap-4 text-sm text-foreground-muted">
                                         <span>₹{parseFloat(item.unitPrice).toLocaleString()} per ticket</span>
                                         {item.seatIds && item.seatIds.length > 0 && (
@@ -154,6 +173,7 @@ export default function CartPage() {
                                     </div>
                                 </div>
 
+                                {/* Remove item button */}
                                 <button
                                     onClick={() => removeItem(item.id)}
                                     disabled={isLoading}
@@ -165,7 +185,7 @@ export default function CartPage() {
                             </div>
 
                             <div className="mt-4 flex items-center justify-between">
-                                {/* Quantity Controls */}
+                                {/* Quantity Controls: +/- buttons for non-assigned-seat items */}
                                 {!item.seatIds ? (
                                     <div className="flex items-center gap-2">
                                         <button
@@ -192,6 +212,7 @@ export default function CartPage() {
                                     </span>
                                 )}
 
+                                {/* Line item subtotal */}
                                 <span className="text-lg font-bold text-foreground">
                                     ₹{parseFloat(item.subtotal).toLocaleString()}
                                 </span>
@@ -200,7 +221,7 @@ export default function CartPage() {
                     ))}
                 </div>
 
-                {/* Order Summary */}
+                {/* Order Summary sidebar (right column, sticky) */}
                 <div className="lg:col-span-1">
                     <div className="sticky top-24 rounded-2xl border border-border bg-background-soft p-6">
                         <h2 className="text-lg font-bold text-foreground mb-6">Order Summary</h2>
@@ -231,7 +252,7 @@ export default function CartPage() {
                             <ArrowRight className="h-4 w-4" />
                         </Link>
 
-                        {/* Continue Shopping */}
+                        {/* Continue Shopping link */}
                         <Link
                             href="/events"
                             className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-border px-6 py-3 text-sm font-medium text-foreground-muted hover:text-foreground hover:bg-background transition-colors"

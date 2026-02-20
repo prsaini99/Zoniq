@@ -1,3 +1,14 @@
+/**
+ * AdminUsersPage - Displays a searchable, paginated table of all platform users.
+ *
+ * Features:
+ * - Summary stat cards: total users, admins, new today, new this week.
+ * - Search by name, email, or username.
+ * - Table showing user info (name, email, phone), role badge, last login, and join date.
+ * - Paginated navigation.
+ *
+ * Data is fetched from /admin/users (with search/pagination params) and /admin/users/stats.
+ */
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -10,6 +21,7 @@ import { Card, CardContent } from "@/components/ui";
 import { formatDate } from "@/lib/utils";
 import api from "@/lib/api";
 
+// Shape of an individual user row
 interface User {
   id: number;
   username: string;
@@ -24,6 +36,7 @@ interface User {
   createdAt: string;
 }
 
+// Aggregate user statistics
 interface UserStats {
   totalUsers: number;
   activeUsers: number;
@@ -33,20 +46,24 @@ interface UserStats {
   newUsersWeek: number;
 }
 
+// Color mapping for role badges
 const ROLE_COLORS: Record<string, { bg: string; text: string }> = {
   admin: { bg: "bg-primary/20", text: "text-primary" },
   user: { bg: "bg-foreground-muted/20", text: "text-foreground-muted" },
 };
 
 export default function AdminUsersPage() {
+  // Users list and stats
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Search and pagination state
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const pageSize = 20;
 
+  // Memoized fetch: builds query params and fetches users + stats in parallel
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -71,6 +88,7 @@ export default function AdminUsersPage() {
     }
   }, [page, search]);
 
+  // Re-fetch whenever page or search changes
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
@@ -79,7 +97,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Page Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Users</h1>
         <p className="text-foreground-muted">
@@ -87,7 +105,7 @@ export default function AdminUsersPage() {
         </p>
       </div>
 
-      {/* Stats */}
+      {/* Stats Cards Row */}
       {stats && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
@@ -125,7 +143,7 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {/* Search */}
+      {/* Search Input */}
       <Card>
         <CardContent className="p-4">
           <div className="relative">
@@ -181,6 +199,7 @@ export default function AdminUsersPage() {
                       key={user.id}
                       className="border-b border-border last:border-0 hover:bg-background-soft"
                     >
+                      {/* User name, email, and optional phone */}
                       <td className="p-4">
                         <div>
                           <p className="font-medium text-foreground">
@@ -196,6 +215,7 @@ export default function AdminUsersPage() {
                           )}
                         </div>
                       </td>
+                      {/* Role badge (admin / user) */}
                       <td className="p-4">
                         <span
                           className={`inline-flex px-2 py-1 rounded-full text-xs font-medium capitalize ${
@@ -205,6 +225,7 @@ export default function AdminUsersPage() {
                           {user.role}
                         </span>
                       </td>
+                      {/* Last login timestamp or "Never" */}
                       <td className="p-4">
                         <p className="text-foreground-muted text-sm">
                           {user.lastLoginAt
@@ -212,6 +233,7 @@ export default function AdminUsersPage() {
                             : "Never"}
                         </p>
                       </td>
+                      {/* Account creation date */}
                       <td className="p-4">
                         <p className="text-foreground-muted text-sm">
                           {user.createdAt ? formatDate(user.createdAt) : "-"}
@@ -226,7 +248,7 @@ export default function AdminUsersPage() {
         </CardContent>
       </Card>
 
-      {/* Pagination */}
+      {/* Pagination Controls */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-foreground-muted">

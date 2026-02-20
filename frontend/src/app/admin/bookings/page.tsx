@@ -1,3 +1,16 @@
+/**
+ * AdminBookingsPage - Lists all platform bookings with filtering, search, and pagination.
+ *
+ * Features:
+ * - Summary stat cards (total, confirmed, pending, cancelled, revenue, tickets sold).
+ * - Search by booking number.
+ * - Filter by booking status and payment status.
+ * - Paginated table of bookings with color-coded status/payment badges.
+ * - "View" action button linking to the booking detail page.
+ *
+ * Data is fetched from /admin/bookings (with query params) and /admin/bookings/stats.
+ * Refetches whenever page, search, statusFilter, or paymentFilter changes.
+ */
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -13,6 +26,7 @@ import { Button, Card, CardContent } from "@/components/ui";
 import { formatDate, formatPrice } from "@/lib/utils";
 import api from "@/lib/api";
 
+// Shape of an individual booking row returned by the API
 interface Booking {
   id: number;
   booking_number: string;
@@ -37,6 +51,7 @@ interface Booking {
   created_at: string;
 }
 
+// Aggregate booking statistics
 interface BookingStats {
   total_bookings: number;
   confirmed_bookings: number;
@@ -46,6 +61,7 @@ interface BookingStats {
   total_tickets_sold: number;
 }
 
+// Mapping of booking statuses to Tailwind background/text color classes
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   pending: { bg: "bg-warning/20", text: "text-warning" },
   confirmed: { bg: "bg-success/20", text: "text-success" },
@@ -53,6 +69,7 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   refunded: { bg: "bg-foreground-muted/20", text: "text-foreground-muted" },
 };
 
+// Mapping of payment statuses to Tailwind background/text color classes
 const PAYMENT_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   pending: { bg: "bg-warning/20", text: "text-warning" },
   success: { bg: "bg-success/20", text: "text-success" },
@@ -61,16 +78,20 @@ const PAYMENT_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 export default function AdminBookingsPage() {
+  // Bookings list and aggregate stats
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [stats, setStats] = useState<BookingStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Filter/search state
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [paymentFilter, setPaymentFilter] = useState<string>("");
+  // Pagination state
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const pageSize = 20;
 
+  // Memoized fetch function - rebuilds query params from current filters and page
   const fetchBookings = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -82,6 +103,7 @@ export default function AdminBookingsPage() {
       if (statusFilter) params.append("status", statusFilter);
       if (paymentFilter) params.append("payment_status", paymentFilter);
 
+      // Fetch bookings list and aggregate stats in parallel
       const [bookingsRes, statsRes] = await Promise.all([
         api.get(`/admin/bookings?${params}`),
         api.get("/admin/bookings/stats"),
@@ -97,6 +119,7 @@ export default function AdminBookingsPage() {
     }
   }, [page, search, statusFilter, paymentFilter]);
 
+  // Trigger re-fetch whenever the fetch dependencies change
   useEffect(() => {
     fetchBookings();
   }, [fetchBookings]);
@@ -105,7 +128,7 @@ export default function AdminBookingsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Page Header with export button */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Bookings</h1>
@@ -118,7 +141,7 @@ export default function AdminBookingsPage() {
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Summary Stats Row - 6 metric cards */}
       {stats && (
         <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
           <Card>
@@ -172,10 +195,11 @@ export default function AdminBookingsPage() {
         </div>
       )}
 
-      {/* Filters */}
+      {/* Filters: search input, booking status dropdown, payment status dropdown */}
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
+            {/* Search by booking number */}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-foreground-muted" />
               <input
@@ -189,6 +213,7 @@ export default function AdminBookingsPage() {
                 className="w-full pl-10 pr-4 py-2 bg-background-elevated border border-border rounded-lg text-foreground placeholder:text-foreground-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
             </div>
+            {/* Booking status filter */}
             <select
               value={statusFilter}
               onChange={(e) => {
@@ -202,6 +227,7 @@ export default function AdminBookingsPage() {
               <option value="confirmed">Confirmed</option>
               <option value="cancelled">Cancelled</option>
             </select>
+            {/* Payment status filter */}
             <select
               value={paymentFilter}
               onChange={(e) => {
@@ -268,6 +294,7 @@ export default function AdminBookingsPage() {
                       key={booking.id}
                       className="border-b border-border last:border-0 hover:bg-background-soft"
                     >
+                      {/* Booking number and creation date */}
                       <td className="p-4">
                         <p className="font-mono text-foreground">
                           #{booking.booking_number}
@@ -276,6 +303,7 @@ export default function AdminBookingsPage() {
                           {formatDate(booking.created_at)}
                         </p>
                       </td>
+                      {/* Customer name and email */}
                       <td className="p-4">
                         <p className="font-medium text-foreground">
                           {booking.user.full_name || booking.user.username}
@@ -284,6 +312,7 @@ export default function AdminBookingsPage() {
                           {booking.user.email}
                         </p>
                       </td>
+                      {/* Event title and date */}
                       <td className="p-4">
                         <p className="font-medium text-foreground truncate max-w-[200px]">
                           {booking.event.title}
@@ -292,9 +321,11 @@ export default function AdminBookingsPage() {
                           {formatDate(booking.event.event_date)}
                         </p>
                       </td>
+                      {/* Ticket count */}
                       <td className="p-4">
                         <p className="text-foreground">{booking.ticket_count}</p>
                       </td>
+                      {/* Final amount with optional discount line */}
                       <td className="p-4">
                         <p className="font-medium text-foreground">
                           {formatPrice(booking.final_amount)}
@@ -305,6 +336,7 @@ export default function AdminBookingsPage() {
                           </p>
                         )}
                       </td>
+                      {/* Booking status badge */}
                       <td className="p-4">
                         <span
                           className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
@@ -314,6 +346,7 @@ export default function AdminBookingsPage() {
                           {booking.status}
                         </span>
                       </td>
+                      {/* Payment status badge */}
                       <td className="p-4">
                         <span
                           className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
@@ -323,6 +356,7 @@ export default function AdminBookingsPage() {
                           {booking.payment_status}
                         </span>
                       </td>
+                      {/* View detail action */}
                       <td className="p-4">
                         <div className="flex items-center justify-end">
                           <Link href={`/admin/bookings/${booking.id}`}>
@@ -341,7 +375,7 @@ export default function AdminBookingsPage() {
         </CardContent>
       </Card>
 
-      {/* Pagination */}
+      {/* Pagination controls */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-foreground-muted">

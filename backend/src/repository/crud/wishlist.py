@@ -1,3 +1,7 @@
+# Wishlist CRUD repository -- manages user wishlists for events.
+# Allows users to save published events for later, retrieve their full wishlist,
+# remove events, and check wishlist membership.
+
 """
 Wishlist CRUD Repository
 """
@@ -14,6 +18,8 @@ from src.utilities.exceptions.database import EntityDoesNotExist, EntityAlreadyE
 
 class WishlistCRUDRepository(BaseCRUDRepository):
 
+    # Retrieves all wishlist items for a user with eager-loaded event and venue data.
+    # Ordered by most recently added first.
     async def get_user_wishlist(
         self,
         account_id: int,
@@ -28,6 +34,10 @@ class WishlistCRUDRepository(BaseCRUDRepository):
         result = await self.async_session.execute(statement=stmt)
         return result.scalars().unique().all()
 
+    # Adds an event to the user's wishlist. Validates that the event exists and
+    # is published (only published events can be wishlisted). Prevents duplicates
+    # by checking for an existing wishlist entry first. Returns the created item
+    # with eager-loaded event and venue relationships.
     async def add_to_wishlist(
         self,
         account_id: int,
@@ -40,6 +50,7 @@ class WishlistCRUDRepository(BaseCRUDRepository):
             raise EntityAlreadyExists("Event is already in your wishlist")
 
         # Verify event exists and is published
+        # Only published events are available for wishlisting.
         event_stmt = sqlalchemy.select(Event).where(
             Event.id == event_id,
             Event.status == EventStatus.PUBLISHED.value,
@@ -58,7 +69,7 @@ class WishlistCRUDRepository(BaseCRUDRepository):
         await self.async_session.commit()
         await self.async_session.refresh(instance=wishlist_item)
 
-        # Load the event relationship
+        # Load the event relationship for the response.
         stmt = (
             sqlalchemy.select(Wishlist)
             .options(joinedload(Wishlist.event).joinedload(Event.venue))
@@ -67,6 +78,8 @@ class WishlistCRUDRepository(BaseCRUDRepository):
         result = await self.async_session.execute(statement=stmt)
         return result.scalar_one()
 
+    # Removes an event from the user's wishlist by deleting the matching record.
+    # Raises EntityDoesNotExist if the event was not in the wishlist (rowcount == 0).
     async def remove_from_wishlist(
         self,
         account_id: int,
@@ -83,6 +96,8 @@ class WishlistCRUDRepository(BaseCRUDRepository):
         if result.rowcount == 0:
             raise EntityDoesNotExist("Event not found in your wishlist")
 
+    # Fetches a single wishlist entry for a user+event combination.
+    # Returns None if the event is not in the user's wishlist.
     async def get_wishlist_item(
         self,
         account_id: int,
@@ -96,6 +111,8 @@ class WishlistCRUDRepository(BaseCRUDRepository):
         result = await self.async_session.execute(statement=stmt)
         return result.scalar()
 
+    # Boolean convenience method to check if an event is in a user's wishlist.
+    # Delegates to get_wishlist_item and converts the result to a boolean.
     async def is_in_wishlist(
         self,
         account_id: int,

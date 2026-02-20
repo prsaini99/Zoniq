@@ -1,3 +1,8 @@
+# Admin dashboard routes -- provides aggregate statistics, revenue charts,
+# recent booking feeds, and upcoming event summaries for the admin dashboard.
+# All queries run directly against SQLAlchemy models and are scoped to
+# confirmed bookings where revenue/ticket counts are concerned.
+
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
@@ -20,6 +25,11 @@ logger = logging.getLogger(__name__)
 router = fastapi.APIRouter(prefix="/dashboard", tags=["admin-dashboard"])
 
 
+# ==================== Response Schemas ====================
+# These Pydantic models define the shape of dashboard API responses.
+
+# Comprehensive overview stats covering users, events, bookings, revenue,
+# tickets, and month-over-month growth percentages.
 class DashboardOverviewResponse(BaseModel):
     total_users: int
     new_users_today: int
@@ -45,16 +55,19 @@ class DashboardOverviewResponse(BaseModel):
     users_growth_percent: float = 0
 
 
+# Single data point for the revenue time-series chart
 class RevenueDataPoint(BaseModel):
     date: str
     revenue: float
     bookings: int
 
 
+# Wrapper containing a list of revenue data points for charting
 class RevenueChartData(BaseModel):
     data: list[RevenueDataPoint]
 
 
+# A single item in the recent activity feed
 class RecentActivityItem(BaseModel):
     type: str
     title: str
@@ -63,6 +76,7 @@ class RecentActivityItem(BaseModel):
     metadata: Optional[dict] = None
 
 
+# Composite dashboard response combining overview, chart, bookings, and events
 class DashboardResponse(BaseModel):
     overview: DashboardOverviewResponse
     revenue_chart: RevenueChartData
@@ -70,6 +84,10 @@ class DashboardResponse(BaseModel):
     upcoming_events: list[dict]
 
 
+# GET /admin/dashboard/overview -- Returns a comprehensive snapshot of
+# platform health: user growth, event status breakdown, booking volumes,
+# revenue totals, and ticket counts across today/week/month windows.
+# Also computes month-over-month revenue growth percentage.
 @router.get(
     "/overview",
     name="admin:dashboard-overview",
@@ -81,44 +99,52 @@ async def get_dashboard_overview(
     repo: BaseCRUDRepository = Depends(get_repository(repo_type=BaseCRUDRepository)),
 ) -> DashboardOverviewResponse:
     """Get dashboard overview statistics."""
+    # Define time boundaries for today, this week, and this month
     now = datetime.utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = today_start - timedelta(days=7)
     month_start = today_start - timedelta(days=30)
     prev_month_start = month_start - timedelta(days=30)
 
-    # User stats
+    # --- User stats ---
+    # Count total registered users
     total_users_result = await repo.async_session.execute(
         select(func.count(Account.id))
     )
     total_users = total_users_result.scalar() or 0
 
+    # Count users registered today
     new_users_today_result = await repo.async_session.execute(
         select(func.count(Account.id)).where(Account.created_at >= today_start)
     )
     new_users_today = new_users_today_result.scalar() or 0
 
+    # Count users registered in the last 7 days
     new_users_week_result = await repo.async_session.execute(
         select(func.count(Account.id)).where(Account.created_at >= week_start)
     )
     new_users_week = new_users_week_result.scalar() or 0
 
+    # Count users registered in the last 30 days
     new_users_month_result = await repo.async_session.execute(
         select(func.count(Account.id)).where(Account.created_at >= month_start)
     )
     new_users_month = new_users_month_result.scalar() or 0
 
-    # Event stats
+    # --- Event stats ---
+    # Count all events regardless of status
     total_events_result = await repo.async_session.execute(
         select(func.count(Event.id))
     )
     total_events = total_events_result.scalar() or 0
 
+    # Count currently published (active) events
     active_events_result = await repo.async_session.execute(
         select(func.count(Event.id)).where(Event.status == "published")
     )
     active_events = active_events_result.scalar() or 0
 
+    # Count published events with a future event_date
     upcoming_events_result = await repo.async_session.execute(
         select(func.count(Event.id)).where(
             and_(Event.status == "published", Event.event_date > now)
@@ -126,19 +152,22 @@ async def get_dashboard_overview(
     )
     upcoming_events = upcoming_events_result.scalar() or 0
 
+    # Count events that have completed
     completed_events_result = await repo.async_session.execute(
         select(func.count(Event.id)).where(Event.status == "completed")
     )
     completed_events = completed_events_result.scalar() or 0
 
-    # Booking stats
+    # --- Booking stats (confirmed bookings only) ---
     confirmed_filter = Booking.status == "confirmed"
 
+    # Total confirmed bookings all-time
     total_bookings_result = await repo.async_session.execute(
         select(func.count(Booking.id)).where(confirmed_filter)
     )
     total_bookings = total_bookings_result.scalar() or 0
 
+    # Confirmed bookings created today
     bookings_today_result = await repo.async_session.execute(
         select(func.count(Booking.id)).where(
             and_(confirmed_filter, Booking.created_at >= today_start)
@@ -146,6 +175,7 @@ async def get_dashboard_overview(
     )
     bookings_today = bookings_today_result.scalar() or 0
 
+    # Confirmed bookings created in the last 7 days
     bookings_week_result = await repo.async_session.execute(
         select(func.count(Booking.id)).where(
             and_(confirmed_filter, Booking.created_at >= week_start)
@@ -153,6 +183,7 @@ async def get_dashboard_overview(
     )
     bookings_week = bookings_week_result.scalar() or 0
 
+    # Confirmed bookings created in the last 30 days
     bookings_month_result = await repo.async_session.execute(
         select(func.count(Booking.id)).where(
             and_(confirmed_filter, Booking.created_at >= month_start)
@@ -160,12 +191,14 @@ async def get_dashboard_overview(
     )
     bookings_month = bookings_month_result.scalar() or 0
 
-    # Revenue stats
+    # --- Revenue stats (confirmed bookings only) ---
+    # All-time total revenue
     total_revenue_result = await repo.async_session.execute(
         select(func.sum(Booking.final_amount)).where(confirmed_filter)
     )
     total_revenue = float(total_revenue_result.scalar() or 0)
 
+    # Revenue earned today
     revenue_today_result = await repo.async_session.execute(
         select(func.sum(Booking.final_amount)).where(
             and_(confirmed_filter, Booking.created_at >= today_start)
@@ -173,6 +206,7 @@ async def get_dashboard_overview(
     )
     revenue_today = float(revenue_today_result.scalar() or 0)
 
+    # Revenue earned in the last 7 days
     revenue_week_result = await repo.async_session.execute(
         select(func.sum(Booking.final_amount)).where(
             and_(confirmed_filter, Booking.created_at >= week_start)
@@ -180,6 +214,7 @@ async def get_dashboard_overview(
     )
     revenue_week = float(revenue_week_result.scalar() or 0)
 
+    # Revenue earned in the last 30 days
     revenue_month_result = await repo.async_session.execute(
         select(func.sum(Booking.final_amount)).where(
             and_(confirmed_filter, Booking.created_at >= month_start)
@@ -199,17 +234,19 @@ async def get_dashboard_overview(
     )
     prev_month_revenue = float(prev_month_revenue_result.scalar() or 0)
 
-    # Calculate growth percentages
+    # Calculate month-over-month revenue growth percentage
     revenue_growth_percent = 0.0
     if prev_month_revenue > 0:
         revenue_growth_percent = ((revenue_month - prev_month_revenue) / prev_month_revenue) * 100
 
-    # Tickets stats
+    # --- Ticket stats (confirmed bookings only) ---
+    # All-time tickets sold
     total_tickets_result = await repo.async_session.execute(
         select(func.sum(Booking.ticket_count)).where(confirmed_filter)
     )
     total_tickets = total_tickets_result.scalar() or 0
 
+    # Tickets sold today
     tickets_today_result = await repo.async_session.execute(
         select(func.sum(Booking.ticket_count)).where(
             and_(confirmed_filter, Booking.created_at >= today_start)
@@ -217,6 +254,7 @@ async def get_dashboard_overview(
     )
     tickets_today = tickets_today_result.scalar() or 0
 
+    # Tickets sold in the last 7 days
     tickets_week_result = await repo.async_session.execute(
         select(func.sum(Booking.ticket_count)).where(
             and_(confirmed_filter, Booking.created_at >= week_start)
@@ -250,6 +288,10 @@ async def get_dashboard_overview(
     )
 
 
+# GET /admin/dashboard/revenue-chart -- Returns daily revenue and booking
+# count data points for a configurable period (week, month, quarter).
+# Missing dates (days with no bookings) are backfilled with zero values
+# so the chart has a continuous time axis.
 @router.get(
     "/revenue-chart",
     name="admin:revenue-chart",
@@ -264,6 +306,7 @@ async def get_revenue_chart(
     """Get revenue chart data for a period."""
     now = datetime.utcnow()
 
+    # Map period label to number of days
     if period == "week":
         days = 7
     elif period == "month":
@@ -273,6 +316,7 @@ async def get_revenue_chart(
 
     start_date = now - timedelta(days=days)
 
+    # Query daily aggregated revenue and booking counts for confirmed bookings
     result = await repo.async_session.execute(
         select(
             func.date(Booking.created_at).label("date"),
@@ -289,9 +333,10 @@ async def get_revenue_chart(
         .order_by(func.date(Booking.created_at))
     )
 
+    # Index the raw results by date string for quick lookup
     raw_data = {str(row.date): {"revenue": float(row.revenue or 0), "bookings": row.bookings} for row in result.all()}
 
-    # Fill in missing dates with zeros
+    # Fill in missing dates with zeros so the chart has a continuous x-axis
     data_points = []
     current_date = start_date.date()
     end_date = now.date()
@@ -305,6 +350,7 @@ async def get_revenue_chart(
                 bookings=raw_data[date_str]["bookings"],
             ))
         else:
+            # No bookings on this date; insert a zero-value data point
             data_points.append(RevenueDataPoint(
                 date=date_str,
                 revenue=0,
@@ -315,6 +361,9 @@ async def get_revenue_chart(
     return RevenueChartData(data=data_points)
 
 
+# GET /admin/dashboard/recent-bookings -- Returns the N most recent bookings
+# (across all statuses) for the dashboard activity feed. Eager-loads
+# user and event relationships.
 @router.get(
     "/recent-bookings",
     name="admin:recent-bookings",
@@ -328,6 +377,7 @@ async def get_recent_bookings(
     """Get recent bookings for dashboard."""
     from sqlalchemy.orm import selectinload
 
+    # Fetch the most recent bookings ordered by creation time descending
     result = await repo.async_session.execute(
         select(Booking)
         .options(
@@ -339,6 +389,7 @@ async def get_recent_bookings(
     )
     bookings = result.scalars().all()
 
+    # Build a simplified dict for each booking for the dashboard feed
     return {
         "bookings": [
             {
@@ -358,6 +409,10 @@ async def get_recent_bookings(
     }
 
 
+# GET /admin/dashboard/upcoming-events -- Returns the next N published
+# events (by event_date) that have not yet occurred. For each event,
+# also queries aggregate booking and ticket counts so the dashboard
+# can show sell-through metrics.
 @router.get(
     "/upcoming-events",
     name="admin:upcoming-events",
@@ -371,6 +426,7 @@ async def get_upcoming_events_dashboard(
     """Get upcoming events for dashboard."""
     now = datetime.utcnow()
 
+    # Fetch published events with a future event_date, ordered soonest-first
     result = await repo.async_session.execute(
         select(Event)
         .where(
@@ -384,7 +440,8 @@ async def get_upcoming_events_dashboard(
     )
     events = result.scalars().all()
 
-    # Get booking counts for each event
+    # Get booking counts for each event -- aggregate confirmed bookings
+    # and ticket counts per event_id for the returned events
     event_stats = {}
     if events:
         event_ids = [e.id for e in events]
@@ -408,6 +465,7 @@ async def get_upcoming_events_dashboard(
                 "tickets": row.tickets or 0,
             }
 
+    # Combine event details with booking stats for each upcoming event
     return {
         "events": [
             {

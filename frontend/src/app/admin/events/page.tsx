@@ -1,3 +1,16 @@
+/**
+ * AdminEventsPage - Lists all events with search, status filtering, pagination,
+ * and inline actions (view, edit, publish, cancel, reactivate).
+ *
+ * Features:
+ * - Summary stat cards: total, published, draft, completed, cancelled events.
+ * - Search by event title and filter by status.
+ * - Table displaying event title, date, venue, ticket progress bar, and status badge.
+ * - Inline action buttons per row: view (public page), edit, publish/cancel/reactivate.
+ * - Paginated navigation.
+ *
+ * Data is fetched from /admin/events and /admin/events/stats in parallel.
+ */
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -20,6 +33,7 @@ import { Button, Card, CardContent, Badge } from "@/components/ui";
 import { formatDate, formatPrice } from "@/lib/utils";
 import api from "@/lib/api";
 
+// Venue sub-object embedded in event data
 interface Venue {
   id: number;
   name: string;
@@ -27,6 +41,7 @@ interface Venue {
   state: string | null;
 }
 
+// Shape of a single event row
 interface Event {
   id: number;
   title: string;
@@ -40,6 +55,7 @@ interface Event {
   createdAt: string;
 }
 
+// Aggregate event stats
 interface EventStats {
   total: number;
   published: number;
@@ -48,6 +64,7 @@ interface EventStats {
   completed: number;
 }
 
+// Color mapping for event status badges
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   draft: { bg: "bg-foreground-muted/20", text: "text-foreground-muted" },
   published: { bg: "bg-success/20", text: "text-success" },
@@ -57,15 +74,19 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 export default function AdminEventsPage() {
+  // Events list and stats
   const [events, setEvents] = useState<Event[]>([]);
   const [stats, setStats] = useState<EventStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Search and filter state
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
+  // Pagination
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const pageSize = 10;
 
+  // Fetch events and stats from the admin API; re-runs when filters/page change
   const fetchEvents = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -95,6 +116,7 @@ export default function AdminEventsPage() {
     fetchEvents();
   }, [fetchEvents]);
 
+  // Publish a draft event, then refresh the list
   const handlePublish = async (eventId: number) => {
     try {
       await api.post(`/admin/events/${eventId}/publish`);
@@ -104,6 +126,7 @@ export default function AdminEventsPage() {
     }
   };
 
+  // Cancel a published event after user confirmation
   const handleCancel = async (eventId: number) => {
     if (!confirm("Are you sure you want to cancel this event?")) return;
     try {
@@ -114,6 +137,7 @@ export default function AdminEventsPage() {
     }
   };
 
+  // Reactivate a cancelled event (sets it back to draft) after user confirmation
   const handleReactivate = async (eventId: number) => {
     if (!confirm("Reactivate this event? It will be set to draft status.")) return;
     try {
@@ -128,7 +152,7 @@ export default function AdminEventsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Page Header with "Create Event" CTA */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Events</h1>
@@ -141,7 +165,7 @@ export default function AdminEventsPage() {
         </Link>
       </div>
 
-      {/* Stats */}
+      {/* Stats Row - 5 cards for event status counts */}
       {stats && (
         <div className="grid gap-4 md:grid-cols-5">
           <Card>
@@ -179,7 +203,7 @@ export default function AdminEventsPage() {
         </div>
       )}
 
-      {/* Filters */}
+      {/* Filters: search input and status dropdown */}
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
@@ -214,7 +238,7 @@ export default function AdminEventsPage() {
         </CardContent>
       </Card>
 
-      {/* Events List */}
+      {/* Events Table */}
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
@@ -257,6 +281,7 @@ export default function AdminEventsPage() {
                       key={event.id}
                       className="border-b border-border last:border-0 hover:bg-background-soft"
                     >
+                      {/* Event title and category */}
                       <td className="p-4">
                         <div>
                           <p className="font-medium text-foreground">
@@ -267,11 +292,13 @@ export default function AdminEventsPage() {
                           </p>
                         </div>
                       </td>
+                      {/* Event date */}
                       <td className="p-4">
                         <p className="text-foreground">
                           {formatDate(event.eventDate)}
                         </p>
                       </td>
+                      {/* Venue name and city */}
                       <td className="p-4">
                         <p className="text-foreground">
                           {event.venue?.name || "No venue"}
@@ -282,6 +309,7 @@ export default function AdminEventsPage() {
                           </p>
                         )}
                       </td>
+                      {/* Sold / Total tickets with visual progress bar */}
                       <td className="p-4">
                         <p className="text-foreground">
                           {event.totalSeats - event.availableSeats} /{" "}
@@ -305,6 +333,7 @@ export default function AdminEventsPage() {
                           />
                         </div>
                       </td>
+                      {/* Status badge */}
                       <td className="p-4">
                         <span
                           className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
@@ -314,18 +343,22 @@ export default function AdminEventsPage() {
                           {event.status}
                         </span>
                       </td>
+                      {/* Action buttons: view public page, edit, and status transitions */}
                       <td className="p-4">
                         <div className="flex items-center justify-end gap-2">
+                          {/* Open public event page in new tab */}
                           <Link href={`/events/${event.slug}`} target="_blank">
                             <Button variant="ghost" size="sm">
                               <Eye className="h-4 w-4" />
                             </Button>
                           </Link>
+                          {/* Edit event */}
                           <Link href={`/admin/events/${event.id}/edit`}>
                             <Button variant="ghost" size="sm">
                               <Edit className="h-4 w-4" />
                             </Button>
                           </Link>
+                          {/* Publish button shown only for draft events */}
                           {event.status === "draft" && (
                             <Button
                               variant="ghost"
@@ -335,6 +368,7 @@ export default function AdminEventsPage() {
                               <CheckCircle className="h-4 w-4 text-success" />
                             </Button>
                           )}
+                          {/* Cancel button shown only for published events */}
                           {event.status === "published" && (
                             <Button
                               variant="ghost"
@@ -345,6 +379,7 @@ export default function AdminEventsPage() {
                               <XCircle className="h-4 w-4 text-error" />
                             </Button>
                           )}
+                          {/* Reactivate button shown only for cancelled events */}
                           {event.status === "cancelled" && (
                             <Button
                               variant="ghost"
@@ -366,7 +401,7 @@ export default function AdminEventsPage() {
         </CardContent>
       </Card>
 
-      {/* Pagination */}
+      {/* Pagination controls */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-foreground-muted">

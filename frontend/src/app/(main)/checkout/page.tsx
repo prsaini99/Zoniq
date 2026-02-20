@@ -1,3 +1,18 @@
+/*
+ * Checkout page: handles the full payment flow for cart items.
+ *
+ * Flow:
+ *   1. Fetches the current cart and pre-fills contact info from the user profile.
+ *   2. Loads the Razorpay checkout script (external payment gateway).
+ *   3. On "Pay" click: creates a pending booking via the API, creates a Razorpay order,
+ *      and opens the Razorpay checkout modal.
+ *   4. On payment success: verifies the payment signature with the backend,
+ *      clears the cart, and redirects to the order confirmation page.
+ *   5. On payment dismissal: cancels the pending booking to release held seats.
+ *
+ * Requires authentication; redirects to /login if not authenticated.
+ */
+
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -21,6 +36,7 @@ import { useAuthStore, useIsAuthenticated } from "@/store/auth";
 import { paymentsApi } from "@/lib/api";
 import type { RazorpayOptions, RazorpayResponse } from "@/types";
 
+// Extend the Window interface to include the Razorpay constructor loaded via external script
 declare global {
     interface Window {
         Razorpay: new (options: RazorpayOptions) => {
@@ -35,13 +51,19 @@ export default function CheckoutPage() {
     const isAuthenticated = useIsAuthenticated();
     const { user } = useAuthStore();
     const { cart, isLoading, error, checkout, clearError, clearCart, fetchCurrentCart } = useCartStore();
+
+    // Contact info fields (pre-filled from user profile)
     const [contactEmail, setContactEmail] = useState("");
     const [contactPhone, setContactPhone] = useState("");
+    // Terms acceptance checkbox
     const [acceptTerms, setAcceptTerms] = useState(false);
+    // Payment processing state
     const [isProcessing, setIsProcessing] = useState(false);
     const [paymentError, setPaymentError] = useState("");
+    // Tracks whether the Razorpay external script has finished loading
     const [razorpayLoaded, setRazorpayLoaded] = useState(false);
 
+    // On mount: redirect if not authenticated, fetch cart, and pre-fill contact info
     useEffect(() => {
         if (!isAuthenticated) {
             router.push("/login?redirect=/checkout");
@@ -62,6 +84,7 @@ export default function CheckoutPage() {
         }
     }, []);
 
+    // Callback after Razorpay payment succeeds: verify signature with backend
     const handlePaymentSuccess = useCallback(async (
         response: RazorpayResponse,
         bookingId: number
@@ -89,6 +112,7 @@ export default function CheckoutPage() {
         }
     }, [clearCart, router]);
 
+    // Open the Razorpay checkout modal with the order details
     const openRazorpayCheckout = useCallback((
         orderData: {
             orderId: string;
@@ -146,6 +170,7 @@ export default function CheckoutPage() {
         razorpay.open();
     }, [handlePaymentSuccess, fetchCurrentCart]);
 
+    // Main checkout handler: create booking -> create Razorpay order -> open payment modal
     const handleCheckout = async () => {
         if (!acceptTerms) return;
         if (!razorpayLoaded) {
@@ -176,7 +201,7 @@ export default function CheckoutPage() {
         }
     };
 
-    // Show loading state
+    // Show loading state while cart data is being fetched
     if (isLoading) {
         return (
             <div className="container mx-auto px-4 py-20">
@@ -188,6 +213,7 @@ export default function CheckoutPage() {
         );
     }
 
+    // Empty cart state: redirect user to browse events
     if (!cart || cart.items.length === 0) {
         return (
             <div className="container mx-auto px-4 py-20">
@@ -207,7 +233,7 @@ export default function CheckoutPage() {
 
     return (
         <>
-            {/* Load Razorpay Script */}
+            {/* Load Razorpay Script asynchronously after page is interactive */}
             <Script
                 src="https://checkout.razorpay.com/v1/checkout.js"
                 strategy="afterInteractive"
@@ -217,7 +243,7 @@ export default function CheckoutPage() {
             />
 
             <div className="container mx-auto px-4 py-8">
-                {/* Header */}
+                {/* Header with back navigation */}
                 <div className="mb-8">
                     <Link
                         href="/events"
@@ -230,6 +256,7 @@ export default function CheckoutPage() {
                     <p className="mt-1 text-foreground-muted">Review your order and complete your purchase</p>
                 </div>
 
+                {/* Error banner for cart or payment errors */}
                 {(error || paymentError) && (
                     <div className="mb-6 flex items-center gap-3 rounded-xl bg-red-500/10 p-4 text-red-500">
                         <AlertCircle className="h-5 w-5 flex-shrink-0" />
@@ -240,7 +267,7 @@ export default function CheckoutPage() {
                 <div className="grid gap-8 lg:grid-cols-3">
                     {/* Left: Order Details & Contact */}
                     <div className="lg:col-span-2 space-y-6">
-                        {/* Event Info Card */}
+                        {/* Event Info Card: thumbnail, title, and date/time */}
                         <div className="rounded-2xl border border-border bg-background-soft p-6">
                             <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                                 <Calendar className="h-5 w-5 text-primary" />
@@ -272,7 +299,7 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
-                        {/* Ticket Summary */}
+                        {/* Ticket Summary: lists each ticket line item with category, quantity, and subtotal */}
                         <div className="rounded-2xl border border-border bg-background-soft p-6">
                             <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                                 <Ticket className="h-5 w-5 text-primary" />
@@ -297,7 +324,7 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
-                        {/* Contact Information */}
+                        {/* Contact Information: email (for e-ticket delivery) and optional phone */}
                         <div className="rounded-2xl border border-border bg-background-soft p-6">
                             <h2 className="text-lg font-bold text-foreground mb-4">Contact Information</h2>
                             <p className="text-sm text-foreground-muted mb-4">
@@ -328,11 +355,12 @@ export default function CheckoutPage() {
                         </div>
                     </div>
 
-                    {/* Right: Payment Summary */}
+                    {/* Right: Payment Summary sidebar (sticky) */}
                     <div className="lg:col-span-1">
                         <div className="sticky top-24 rounded-2xl border border-border bg-background-soft p-6">
                             <h2 className="text-lg font-bold text-foreground mb-6">Payment Summary</h2>
 
+                            {/* Price breakdown: subtotal and total */}
                             <div className="space-y-3">
                                 <div className="flex justify-between text-sm">
                                     <span className="text-foreground-muted">Subtotal ({cart.itemCount} tickets)</span>
@@ -346,7 +374,7 @@ export default function CheckoutPage() {
                                 </div>
                             </div>
 
-                            {/* Terms */}
+                            {/* Terms & Conditions checkbox */}
                             <label className="mt-6 flex items-start gap-3 cursor-pointer">
                                 <input
                                     type="checkbox"
@@ -362,7 +390,7 @@ export default function CheckoutPage() {
                                 </span>
                             </label>
 
-                            {/* Pay Button */}
+                            {/* Pay Button: disabled until terms accepted and Razorpay is loaded */}
                             <button
                                 onClick={handleCheckout}
                                 disabled={!acceptTerms || isProcessing || !razorpayLoaded}
@@ -391,7 +419,7 @@ export default function CheckoutPage() {
                                 )}
                             </button>
 
-                            {/* Trust Badges */}
+                            {/* Trust Badges: reassure users about payment security */}
                             <div className="mt-6 space-y-3">
                                 <div className="flex items-center gap-2 text-xs text-foreground-muted">
                                     <Shield className="h-4 w-4 text-green-500" />
@@ -407,7 +435,7 @@ export default function CheckoutPage() {
                                 </div>
                             </div>
 
-                            {/* Payment Methods */}
+                            {/* Accepted Payment Methods */}
                             <div className="mt-6 pt-4 border-t border-border">
                                 <p className="text-xs text-foreground-muted mb-3">Accepted payment methods</p>
                                 <div className="flex flex-wrap gap-2">

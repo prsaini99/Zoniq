@@ -1,3 +1,7 @@
+# Seat Category CRUD repository -- manages seat categories (pricing tiers) for events.
+# Each event can have multiple categories (e.g., VIP, Standard, Economy) with
+# independent pricing, seat counts, and display configuration.
+
 import typing
 
 import sqlalchemy
@@ -11,6 +15,8 @@ from src.utilities.exceptions.database import EntityDoesNotExist, EntityAlreadyE
 
 class SeatCategoryCRUDRepository(BaseCRUDRepository):
 
+    # Creates a new seat category for an event. Validates that the category name is
+    # unique within the event. Initially sets available_seats equal to total_seats.
     async def create_category(
         self,
         event_id: int,
@@ -41,6 +47,8 @@ class SeatCategoryCRUDRepository(BaseCRUDRepository):
 
         return new_category
 
+    # Looks up a seat category by name within a specific event.
+    # Used internally to enforce name uniqueness per event.
     async def _get_category_by_name(
         self,
         event_id: int,
@@ -54,6 +62,8 @@ class SeatCategoryCRUDRepository(BaseCRUDRepository):
         query = await self.async_session.execute(statement=stmt)
         return query.scalar()
 
+    # Fetches a seat category by its primary key.
+    # Raises EntityDoesNotExist if no matching category is found.
     async def read_category_by_id(self, category_id: int) -> SeatCategory:
         """Get a category by ID"""
         stmt = sqlalchemy.select(SeatCategory).where(SeatCategory.id == category_id)
@@ -65,6 +75,8 @@ class SeatCategoryCRUDRepository(BaseCRUDRepository):
 
         return category
 
+    # Retrieves all seat categories for an event, optionally filtering to active-only.
+    # Ordered by display_order first, then alphabetically by name.
     async def read_categories_by_event(
         self,
         event_id: int,
@@ -81,6 +93,9 @@ class SeatCategoryCRUDRepository(BaseCRUDRepository):
         query = await self.async_session.execute(statement=stmt)
         return query.scalars().all()
 
+    # Updates a seat category with the provided fields. If total_seats is changed,
+    # available_seats is recalculated: new_available = new_total - already_sold.
+    # Prevents reducing total below the number of already-sold seats.
     async def update_category(
         self,
         category_id: int,
@@ -95,6 +110,7 @@ class SeatCategoryCRUDRepository(BaseCRUDRepository):
             return category
 
         # If total_seats is being updated, adjust available_seats proportionally
+        # Ensure the new total is not less than the number of seats already sold.
         if "total_seats" in update_data:
             sold_seats = category.total_seats - category.available_seats
             new_total = update_data["total_seats"]
@@ -102,6 +118,7 @@ class SeatCategoryCRUDRepository(BaseCRUDRepository):
                 raise ValueError(
                     f"Cannot reduce total seats below {sold_seats} (already sold)"
                 )
+            # Recalculate available seats: new_total minus already sold.
             update_data["available_seats"] = new_total - sold_seats
 
         stmt = (
@@ -114,10 +131,13 @@ class SeatCategoryCRUDRepository(BaseCRUDRepository):
 
         return await self.read_category_by_id(category_id=category_id)
 
+    # Permanently deletes a seat category. Only allowed if no seats have been sold
+    # (i.e., available_seats equals total_seats) to prevent orphaned booking items.
     async def delete_category(self, category_id: int) -> bool:
         """Delete a seat category (only if no seats sold)"""
         category = await self.read_category_by_id(category_id=category_id)
 
+        # If available < total, some seats have been sold and deletion is not safe.
         if category.available_seats < category.total_seats:
             raise ValueError("Cannot delete category with sold seats")
 
@@ -127,6 +147,8 @@ class SeatCategoryCRUDRepository(BaseCRUDRepository):
 
         return True
 
+    # Atomically decrements the available seat count using a SQL expression.
+    # Used during booking to reduce availability without loading the full object.
     async def decrement_available_seats(
         self,
         category_id: int,
@@ -144,6 +166,8 @@ class SeatCategoryCRUDRepository(BaseCRUDRepository):
         await self.async_session.execute(statement=stmt)
         await self.async_session.commit()
 
+    # Atomically increments the available seat count using a SQL expression.
+    # Used when bookings are cancelled or payments fail to restore availability.
     async def increment_available_seats(
         self,
         category_id: int,
@@ -161,6 +185,8 @@ class SeatCategoryCRUDRepository(BaseCRUDRepository):
         await self.async_session.execute(statement=stmt)
         await self.async_session.commit()
 
+    # Aggregates total and available seats across all active categories for an event.
+    # Returns a tuple of (total_seats, available_seats). Used to update event-level counts.
     async def get_total_seats_for_event(self, event_id: int) -> tuple[int, int]:
         """Get total and available seats for an event across all categories"""
         stmt = sqlalchemy.select(

@@ -1,3 +1,4 @@
+# Enum defining the supported deployment environments used by the settings factory
 import enum
 
 

@@ -1,3 +1,20 @@
+/**
+ * TicketSelectionModal - A full-screen modal overlay that lets users select
+ * ticket quantities across different seat categories before proceeding to checkout.
+ *
+ * Props:
+ * - isOpen / onClose: control modal visibility.
+ * - eventId / eventTitle: identify the event being booked.
+ * - categories: available seat categories (name, price, availability, color).
+ * - maxTicketsPerBooking: enforced upper limit on total tickets per order.
+ *
+ * Key behaviors:
+ * - Initializes per-category quantity counters when the modal opens.
+ * - Enforces per-category availability and the global max-tickets limit.
+ * - On "Proceed to Payment": clears the existing cart (backend + store),
+ *   adds each selected category/quantity to the cart, then navigates to /checkout.
+ * - Displays a live summary of total tickets and total amount in the footer.
+ */
 "use client";
 
 import { useState, useEffect } from "react";
@@ -9,6 +26,7 @@ import { useCartStore } from "@/store/cart";
 import { cartApi } from "@/lib/api";
 import type { SeatCategory } from "@/types";
 
+// Props interface for the modal component
 interface TicketSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -18,6 +36,7 @@ interface TicketSelectionModalProps {
   maxTicketsPerBooking: number;
 }
 
+// Tracks the selected quantity for a single seat category
 interface TicketQuantity {
   categoryId: number;
   quantity: number;
@@ -33,11 +52,12 @@ export function TicketSelectionModal({
 }: TicketSelectionModalProps) {
   const router = useRouter();
   const { addItem, clearCartAsync } = useCartStore();
+  // Per-category quantity selections
   const [quantities, setQuantities] = useState<TicketQuantity[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize quantities when modal opens
+  // Reset quantities whenever the modal opens or categories change
   useEffect(() => {
     if (isOpen) {
       setQuantities(
@@ -49,6 +69,7 @@ export function TicketSelectionModal({
     }
   }, [isOpen, categories]);
 
+  // Increment or decrement a category's quantity, clamped to [0, min(available, max)]
   const updateQuantity = (categoryId: number, delta: number) => {
     setQuantities((prev) =>
       prev.map((q) => {
@@ -62,12 +83,14 @@ export function TicketSelectionModal({
     );
   };
 
+  // Derived totals for the summary footer
   const totalTickets = quantities.reduce((sum, q) => sum + q.quantity, 0);
   const totalAmount = quantities.reduce((sum, q) => {
     const category = categories.find((c) => c.id === q.categoryId);
     return sum + (category ? parseFloat(category.price) * q.quantity : 0);
   }, 0);
 
+  // Validates selection, clears existing cart, adds items, and navigates to checkout
   const handleProceedToPayment = async () => {
     const selectedTickets = quantities.filter((q) => q.quantity > 0);
     if (selectedTickets.length === 0) {
@@ -87,7 +110,7 @@ export function TicketSelectionModal({
       // Clear any existing cart first (on backend too)
       await clearCartAsync();
 
-      // Add all selected tickets to cart
+      // Add all selected tickets to cart sequentially
       for (const ticket of selectedTickets) {
         await addItem({
           eventId,
@@ -104,19 +127,20 @@ export function TicketSelectionModal({
     }
   };
 
+  // Do not render anything when the modal is closed
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
+      {/* Backdrop overlay - clicking it closes the modal */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Modal */}
+      {/* Modal container */}
       <div className="relative w-full max-w-md mx-4 bg-background-card rounded-2xl shadow-2xl border border-border overflow-hidden">
-        {/* Header */}
+        {/* Header: title, event name, and close button */}
         <div className="flex items-center justify-between p-6 border-b border-border">
           <div>
             <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
@@ -135,7 +159,7 @@ export function TicketSelectionModal({
           </button>
         </div>
 
-        {/* Ticket Categories */}
+        {/* Ticket Categories List - scrollable if many categories */}
         <div className="p-6 space-y-4 max-h-[400px] overflow-y-auto">
           {categories
             .filter((c) => c.isActive)
@@ -158,6 +182,7 @@ export function TicketSelectionModal({
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
+                      {/* Category name with color dot */}
                       <div className="flex items-center gap-2 mb-1">
                         <div
                           className="h-3 w-3 rounded-full ring-2 ring-offset-2 ring-offset-background-card"
@@ -167,6 +192,7 @@ export function TicketSelectionModal({
                           {category.name}
                         </span>
                       </div>
+                      {/* Price and availability info */}
                       <div className="text-sm text-foreground-muted">
                         {formatPrice(category.price)}
                       </div>
@@ -177,7 +203,7 @@ export function TicketSelectionModal({
                       </div>
                     </div>
 
-                    {/* Quantity Controls */}
+                    {/* Quantity increment/decrement controls (hidden when sold out) */}
                     {!isSoldOut && (
                       <div className="flex items-center gap-2">
                         <button
@@ -205,13 +231,13 @@ export function TicketSelectionModal({
             })}
         </div>
 
-        {/* Footer */}
+        {/* Footer: error message, ticket/price summary, and proceed button */}
         <div className="p-6 border-t border-border bg-background-soft space-y-4">
           {error && (
             <div className="text-sm text-red-500 text-center">{error}</div>
           )}
 
-          {/* Summary */}
+          {/* Summary: total ticket count and total price */}
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm text-foreground-muted">

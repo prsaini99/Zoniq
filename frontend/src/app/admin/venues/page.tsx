@@ -1,3 +1,18 @@
+/**
+ * AdminVenuesPage - CRUD management page for event venues.
+ *
+ * Features:
+ * - Summary stats: total venues, active count, combined capacity.
+ * - Search by venue name, filter by city, filter by active/inactive.
+ * - Grid of venue cards showing name, location, capacity, and active status.
+ * - Inline edit and delete buttons per card.
+ * - Modal form for creating a new venue or editing an existing one.
+ *   The modal includes fields for name, address, city, state, country,
+ *   pincode, capacity, contact phone, contact email, and an active toggle.
+ * - Paginated navigation.
+ *
+ * Data is fetched from /admin/venues with search/filter/pagination params.
+ */
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -14,6 +29,7 @@ import {
 import { Button, Card, CardContent } from "@/components/ui";
 import api from "@/lib/api";
 
+// Full venue shape as returned by the API
 interface Venue {
   id: number;
   name: string;
@@ -29,6 +45,7 @@ interface Venue {
   createdAt: string;
 }
 
+// Form data shape used for both creating and editing venues (snake_case for API)
 interface VenueFormData {
   name: string;
   address: string;
@@ -42,6 +59,7 @@ interface VenueFormData {
   is_active: boolean;
 }
 
+// Default empty form state
 const initialFormData: VenueFormData = {
   name: "",
   address: "",
@@ -56,19 +74,24 @@ const initialFormData: VenueFormData = {
 };
 
 export default function AdminVenuesPage() {
+  // Venues list state
   const [venues, setVenues] = useState<Venue[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Search and filter state
   const [search, setSearch] = useState("");
   const [cityFilter, setCityFilter] = useState("");
   const [activeFilter, setActiveFilter] = useState<string>("");
+  // Pagination
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  // Modal and form state
   const [showModal, setShowModal] = useState(false);
   const [editingVenue, setEditingVenue] = useState<Venue | null>(null);
   const [formData, setFormData] = useState<VenueFormData>(initialFormData);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const pageSize = 20;
 
+  // Fetch venues from API with current search/filter/pagination params
   const fetchVenues = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -90,16 +113,19 @@ export default function AdminVenuesPage() {
     }
   }, [page, search, cityFilter, activeFilter]);
 
+  // Re-fetch when filters/page change
   useEffect(() => {
     fetchVenues();
   }, [fetchVenues]);
 
+  // Open the modal in "create" mode with a blank form
   const handleOpenCreate = () => {
     setEditingVenue(null);
     setFormData(initialFormData);
     setShowModal(true);
   };
 
+  // Open the modal in "edit" mode, pre-populated with the selected venue's data
   const handleOpenEdit = (venue: Venue) => {
     setEditingVenue(venue);
     setFormData({
@@ -117,6 +143,7 @@ export default function AdminVenuesPage() {
     setShowModal(true);
   };
 
+  // Handle form submission for both create (POST) and edit (PATCH)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -152,6 +179,7 @@ export default function AdminVenuesPage() {
     }
   };
 
+  // Delete (deactivate) a venue after user confirmation
   const handleDelete = async (venueId: number) => {
     if (!confirm("Are you sure you want to deactivate this venue?")) return;
     try {
@@ -164,12 +192,12 @@ export default function AdminVenuesPage() {
 
   const totalPages = Math.ceil(total / pageSize);
 
-  // Get unique cities for filter
+  // Derive unique city names from the loaded venues for the city filter dropdown
   const uniqueCities = [...new Set(venues.map((v) => v.city).filter(Boolean))];
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Page Header with "Add Venue" CTA */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Venues</h1>
@@ -185,7 +213,7 @@ export default function AdminVenuesPage() {
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Summary Stats: total venues, active count, combined capacity */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardContent className="p-4 text-center">
@@ -211,7 +239,7 @@ export default function AdminVenuesPage() {
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Filters: search, city dropdown, active/inactive dropdown */}
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
@@ -228,6 +256,7 @@ export default function AdminVenuesPage() {
                 className="w-full pl-10 pr-4 py-2 bg-background-elevated border border-border rounded-lg text-foreground placeholder:text-foreground-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
             </div>
+            {/* City filter populated from unique cities in the venues list */}
             <select
               value={cityFilter}
               onChange={(e) => {
@@ -243,6 +272,7 @@ export default function AdminVenuesPage() {
                 </option>
               ))}
             </select>
+            {/* Active status filter */}
             <select
               value={activeFilter}
               onChange={(e) => {
@@ -259,7 +289,7 @@ export default function AdminVenuesPage() {
         </CardContent>
       </Card>
 
-      {/* Venues Grid */}
+      {/* Venues Grid - responsive card layout */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -277,6 +307,7 @@ export default function AdminVenuesPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {venues.map((venue) => (
+            // Inactive venues are visually dimmed
             <Card key={venue.id} className={!venue.isActive ? "opacity-60" : ""}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between mb-3">
@@ -295,6 +326,7 @@ export default function AdminVenuesPage() {
                       )}
                     </div>
                   </div>
+                  {/* Active / Inactive status badge */}
                   <span
                     className={`px-2 py-1 rounded-full text-xs font-medium ${
                       venue.isActive
@@ -306,18 +338,21 @@ export default function AdminVenuesPage() {
                   </span>
                 </div>
 
+                {/* Venue address (truncated to 2 lines) */}
                 {venue.address && (
                   <p className="text-sm text-foreground-muted mb-2 line-clamp-2">
                     {venue.address}
                   </p>
                 )}
 
+                {/* Capacity info */}
                 <div className="flex items-center gap-4 text-sm text-foreground-muted mb-4">
                   {venue.capacity && (
                     <span>Capacity: {venue.capacity.toLocaleString()}</span>
                   )}
                 </div>
 
+                {/* Action buttons: edit and delete */}
                 <div className="flex items-center gap-2 pt-3 border-t border-border">
                   <Button
                     variant="ghost"
@@ -343,7 +378,7 @@ export default function AdminVenuesPage() {
         </div>
       )}
 
-      {/* Pagination */}
+      {/* Pagination Controls */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-foreground-muted">
@@ -371,16 +406,19 @@ export default function AdminVenuesPage() {
         </div>
       )}
 
-      {/* Create/Edit Modal */}
+      {/* Create / Edit Venue Modal Overlay */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-background rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal header */}
             <div className="p-6 border-b border-border">
               <h2 className="text-xl font-bold text-foreground">
                 {editingVenue ? "Edit Venue" : "Add New Venue"}
               </h2>
             </div>
+            {/* Venue form */}
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {/* Venue Name (required) */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
                   Venue Name *
@@ -397,6 +435,7 @@ export default function AdminVenuesPage() {
                 />
               </div>
 
+              {/* Address textarea */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
                   Address
@@ -412,6 +451,7 @@ export default function AdminVenuesPage() {
                 />
               </div>
 
+              {/* City and State */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
@@ -443,6 +483,7 @@ export default function AdminVenuesPage() {
                 </div>
               </div>
 
+              {/* Country and Pincode */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
@@ -474,6 +515,7 @@ export default function AdminVenuesPage() {
                 </div>
               </div>
 
+              {/* Capacity */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
                   Capacity
@@ -492,6 +534,7 @@ export default function AdminVenuesPage() {
                 />
               </div>
 
+              {/* Contact Phone and Email */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
@@ -523,7 +566,7 @@ export default function AdminVenuesPage() {
                 </div>
               </div>
 
-              {/* Active Status Toggle - Only show when editing */}
+              {/* Active Status Toggle - Only shown when editing an existing venue */}
               {editingVenue && (
                 <div className="flex items-center justify-between p-4 bg-background-elevated rounded-lg border border-border">
                   <div>
@@ -534,6 +577,7 @@ export default function AdminVenuesPage() {
                       Inactive venues won&apos;t be available for new events
                     </p>
                   </div>
+                  {/* Custom toggle switch */}
                   <button
                     type="button"
                     onClick={() =>
@@ -552,6 +596,7 @@ export default function AdminVenuesPage() {
                 </div>
               )}
 
+              {/* Modal action buttons: cancel and submit */}
               <div className="flex gap-3 pt-4">
                 <Button
                   type="button"

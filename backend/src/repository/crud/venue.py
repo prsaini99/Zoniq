@@ -1,3 +1,7 @@
+# Venue CRUD repository -- manages event venue records including creation,
+# retrieval with search/filtering, updates, soft deletion (deactivation),
+# and permanent deletion.
+
 import typing
 
 import sqlalchemy
@@ -11,6 +15,8 @@ from src.utilities.exceptions.database import EntityDoesNotExist
 
 class VenueCRUDRepository(BaseCRUDRepository):
 
+    # Creates a new venue record with all provided details including address,
+    # capacity, optional seat map configuration, and contact information.
     async def create_venue(self, venue_create: VenueCreate) -> Venue:
         """Create a new venue"""
         new_venue = Venue(
@@ -32,6 +38,8 @@ class VenueCRUDRepository(BaseCRUDRepository):
 
         return new_venue
 
+    # Fetches a venue by its primary key.
+    # Raises EntityDoesNotExist if the venue is not found.
     async def read_venue_by_id(self, venue_id: int) -> Venue:
         """Get a venue by ID"""
         stmt = sqlalchemy.select(Venue).where(Venue.id == venue_id)
@@ -43,6 +51,9 @@ class VenueCRUDRepository(BaseCRUDRepository):
 
         return venue
 
+    # Retrieves a paginated list of venues with optional filters: city (partial match),
+    # active status, and text search across name, city, and address.
+    # Returns both the result set and total count for pagination metadata.
     async def read_venues(
         self,
         page: int = 1,
@@ -59,6 +70,7 @@ class VenueCRUDRepository(BaseCRUDRepository):
             stmt = stmt.where(Venue.city.ilike(f"%{city}%"))
         if is_active is not None:
             stmt = stmt.where(Venue.is_active == is_active)
+        # Search across multiple text fields using case-insensitive ILIKE.
         if search:
             search_pattern = f"%{search}%"
             stmt = stmt.where(
@@ -69,7 +81,7 @@ class VenueCRUDRepository(BaseCRUDRepository):
                 )
             )
 
-        # Count total
+        # Count total matching rows before pagination.
         count_stmt = sqlalchemy.select(sqlalchemy.func.count()).select_from(stmt.subquery())
         count_result = await self.async_session.execute(statement=count_stmt)
         total = count_result.scalar() or 0
@@ -83,12 +95,16 @@ class VenueCRUDRepository(BaseCRUDRepository):
 
         return venues, total
 
+    # Returns all active venues sorted alphabetically. Intended for dropdown
+    # selectors in the UI where the full list is needed without pagination.
     async def read_all_active_venues(self) -> typing.Sequence[Venue]:
         """Get all active venues (for dropdowns)"""
         stmt = sqlalchemy.select(Venue).where(Venue.is_active == True).order_by(Venue.name.asc())
         query = await self.async_session.execute(statement=stmt)
         return query.scalars().all()
 
+    # Partially updates a venue with only the fields provided in the update schema.
+    # Returns the refreshed venue after the update.
     async def update_venue(self, venue_id: int, venue_update: VenueUpdate) -> Venue:
         """Update a venue"""
         venue = await self.read_venue_by_id(venue_id=venue_id)
@@ -108,6 +124,8 @@ class VenueCRUDRepository(BaseCRUDRepository):
 
         return await self.read_venue_by_id(venue_id=venue_id)
 
+    # Soft-deletes a venue by setting is_active=False. The record is preserved
+    # for historical reference (existing events may still reference it).
     async def delete_venue(self, venue_id: int) -> bool:
         """Delete a venue (soft delete by setting is_active=False)"""
         venue = await self.read_venue_by_id(venue_id=venue_id)
@@ -122,6 +140,8 @@ class VenueCRUDRepository(BaseCRUDRepository):
 
         return True
 
+    # Permanently removes a venue from the database. Use with caution --
+    # will fail if foreign key constraints reference this venue.
     async def hard_delete_venue(self, venue_id: int) -> bool:
         """Permanently delete a venue"""
         venue = await self.read_venue_by_id(venue_id=venue_id)

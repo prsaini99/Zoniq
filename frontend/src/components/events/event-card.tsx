@@ -1,3 +1,17 @@
+/**
+ * EventCard - Displays a single event in a card format for listing pages.
+ *
+ * Renders:
+ * - A 16:9 banner image (or a fallback with the first letter of the title).
+ * - Category badge (top-left) and status badges for sold-out / coming-soon (top-right).
+ * - A wishlist heart button that appears on hover (top-right).
+ * - Event title, optional short description, date, time, and venue.
+ * - Footer with available/total seats and a "Book Now" CTA when booking is open.
+ *
+ * The entire card is wrapped in a Link to the event detail page (/events/:slug).
+ *
+ * Also exports EventCardSkeleton for use as a loading placeholder.
+ */
 "use client";
 
 import Link from "next/link";
@@ -17,6 +31,7 @@ interface EventCardProps {
 }
 
 export function EventCard({ event, className, showWishlist = true }: EventCardProps) {
+  // Derive display flags from event data
   const isSoldOut = event.availableSeats === 0;
   const isBookingOpen = event.isBookingOpen;
 
@@ -29,7 +44,7 @@ export function EventCard({ event, className, showWishlist = true }: EventCardPr
           className
         )}
       >
-        {/* Image */}
+        {/* Banner Image Section */}
         <div className="relative aspect-[16/9] overflow-hidden bg-background-elevated">
           {event.bannerImageUrl ? (
             <Image
@@ -39,6 +54,7 @@ export function EventCard({ event, className, showWishlist = true }: EventCardPr
               className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
             />
           ) : (
+            // Fallback when no banner image is provided: show first letter of title
             <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-background-elevated to-background-card">
               <div className="text-5xl font-bold text-foreground-subtle/30">
                 {event.title[0]}
@@ -46,23 +62,24 @@ export function EventCard({ event, className, showWishlist = true }: EventCardPr
             </div>
           )}
 
-          {/* Gradient overlay at bottom of image */}
+          {/* Gradient overlay at bottom of image for better text contrast */}
           <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-background-card to-transparent" />
 
-          {/* Category Badge */}
+          {/* Category Badge (top-left corner) */}
           <div className="absolute top-3 left-3">
             <Badge variant="default">
               {CATEGORY_LABELS[event.category] || event.category}
             </Badge>
           </div>
 
-          {/* Status Badge or Wishlist Button */}
+          {/* Status Badge and Wishlist Button (top-right corner) */}
           <div className="absolute top-3 right-3 flex items-center gap-2">
             {isSoldOut ? (
               <Badge variant="error">Sold Out</Badge>
             ) : !isBookingOpen ? (
               <Badge variant="warning">Coming Soon</Badge>
             ) : null}
+            {/* Wishlist button fades in on card hover */}
             {showWishlist && (
               <WishlistButton
                 event={event}
@@ -73,21 +90,21 @@ export function EventCard({ event, className, showWishlist = true }: EventCardPr
           </div>
         </div>
 
-        {/* Content */}
+        {/* Card Content Section */}
         <div className="p-5 space-y-3">
-          {/* Title */}
+          {/* Event Title */}
           <h3 className="font-semibold text-lg text-foreground line-clamp-2 group-hover:text-primary transition-colors duration-300 tracking-tight">
             {event.title}
           </h3>
 
-          {/* Description */}
+          {/* Short Description (optional, capped at 2 lines) */}
           {event.shortDescription && (
             <p className="text-sm text-foreground-muted line-clamp-2 leading-relaxed">
               {event.shortDescription}
             </p>
           )}
 
-          {/* Details */}
+          {/* Event details: date, time, and venue */}
           <div className="space-y-2 text-sm text-foreground-muted">
             <div className="flex items-center gap-2.5">
               <Calendar className="h-3.5 w-3.5 text-primary/60" />
@@ -107,7 +124,7 @@ export function EventCard({ event, className, showWishlist = true }: EventCardPr
             )}
           </div>
 
-          {/* Footer */}
+          {/* Footer: seat availability and "Book Now" link */}
           <div className="flex items-center justify-between pt-3 border-t border-border/50">
             <div className="flex items-center gap-1.5 text-xs text-foreground-subtle">
               <Users className="h-3.5 w-3.5" />
@@ -129,7 +146,10 @@ export function EventCard({ event, className, showWishlist = true }: EventCardPr
   );
 }
 
-// Skeleton for loading state
+/**
+ * EventCardSkeleton - A shimmer/pulse placeholder matching the EventCard layout.
+ * Used while event data is being fetched to provide visual feedback.
+ */
 export function EventCardSkeleton() {
   return (
     <Card className="overflow-hidden">

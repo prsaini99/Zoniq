@@ -1,6 +1,10 @@
 """
 Admin Venue Management APIs
 """
+# Admin venue management routes -- provides full CRUD for venue records.
+# Supports soft-delete (deactivation) and permanent hard-delete. All
+# mutating operations are logged to the admin audit trail.
+
 from typing import Annotated
 
 import fastapi
@@ -22,6 +26,8 @@ from src.services.admin_log_service import AdminLogService
 router = fastapi.APIRouter(prefix="/venues", tags=["admin-venues"])
 
 
+# Helper to convert a Venue ORM model into VenueResponse, which contains
+# the basic venue fields (no seat_map_config or other detailed data).
 def _build_venue_response(venue) -> VenueResponse:
     """Build VenueResponse from Venue model"""
     return VenueResponse(
@@ -41,6 +47,8 @@ def _build_venue_response(venue) -> VenueResponse:
     )
 
 
+# Helper to convert a Venue ORM model into VenueDetailResponse, which
+# includes all fields from VenueResponse plus the seat_map_config JSON.
 def _build_venue_detail_response(venue) -> VenueDetailResponse:
     """Build VenueDetailResponse from Venue model"""
     return VenueDetailResponse(
@@ -61,6 +69,8 @@ def _build_venue_detail_response(venue) -> VenueDetailResponse:
     )
 
 
+# GET /admin/venues -- Paginated venue listing with optional filters
+# for city, active status, and search term.
 @router.get(
     "",
     name="admin:venues:list",
@@ -95,6 +105,9 @@ async def list_venues(
     )
 
 
+# GET /admin/venues/all -- Unpaginated list of all active venues.
+# Intended for populating dropdown selectors in the admin UI
+# (e.g. when assigning a venue to an event).
 @router.get(
     "/all",
     name="admin:venues:all",
@@ -112,6 +125,8 @@ async def list_all_active_venues(
     return [_build_venue_response(venue) for venue in venues]
 
 
+# POST /admin/venues -- Create a new venue record. Returns the full
+# detail response including seat_map_config. The action is audit-logged.
 @router.post(
     "",
     name="admin:venues:create",
@@ -145,6 +160,8 @@ async def create_venue(
     return _build_venue_detail_response(venue)
 
 
+# GET /admin/venues/{venue_id} -- Retrieve a single venue's full details
+# by its numeric ID, including the seat_map_config.
 @router.get(
     "/{venue_id}",
     name="admin:venues:get",
@@ -163,6 +180,9 @@ async def get_venue(
     return _build_venue_detail_response(venue)
 
 
+# PATCH /admin/venues/{venue_id} -- Partially update a venue. Only
+# the fields included in the request body are modified. The set of
+# changed fields is recorded in the audit log.
 @router.patch(
     "/{venue_id}",
     name="admin:venues:update",
@@ -197,6 +217,9 @@ async def update_venue(
     return _build_venue_detail_response(venue)
 
 
+# DELETE /admin/venues/{venue_id} -- Remove a venue. By default performs
+# a soft delete (sets is_active=False so the venue is hidden but data is
+# preserved). Pass permanent=True to hard-delete the record entirely.
 @router.delete(
     "/{venue_id}",
     name="admin:venues:delete",
@@ -224,6 +247,7 @@ async def delete_venue(
     venue = await venue_repo.read_venue_by_id(venue_id=venue_id)
     venue_name = venue.name
 
+    # Choose between permanent deletion and soft deactivation
     if permanent:
         await venue_repo.hard_delete_venue(venue_id=venue_id)
         action = "hard_delete_venue"

@@ -1,3 +1,6 @@
+# Admin user management routes -- provides endpoints for listing, searching,
+# and retrieving user accounts. All endpoints require admin authentication.
+
 import fastapi
 from fastapi import Depends
 
@@ -11,6 +14,8 @@ from src.repository.crud.account import AccountCRUDRepository
 router = fastapi.APIRouter(prefix="/users", tags=["admin-users"])
 
 
+# Helper function to convert an Account ORM model into the AdminAccountView
+# response schema, mapping all relevant fields including verification and block status.
 def _build_admin_account_view(account: Account) -> AdminAccountView:
     """Helper to build admin account view"""
     return AdminAccountView(
@@ -31,6 +36,9 @@ def _build_admin_account_view(account: Account) -> AdminAccountView:
     )
 
 
+# GET /admin/users -- Paginated user listing with optional search.
+# Accepts page, page_size, and search query params. Returns a paginated
+# list of all user accounts along with the total count.
 @router.get(
     "",
     name="admin:list-users",
@@ -45,12 +53,14 @@ async def list_users(
     account_repo: AccountCRUDRepository = Depends(get_repository(repo_type=AccountCRUDRepository)),
 ) -> AdminUserListResponse:
     """List all users with pagination (admin only)"""
+    # Fetch paginated accounts from the database, applying optional search filter
     accounts, total = await account_repo.read_accounts_paginated(
         page=page,
         page_size=page_size,
         search=search,
     )
 
+    # Transform each Account ORM object into the admin-facing response schema
     return AdminUserListResponse(
         users=[_build_admin_account_view(account) for account in accounts],
         total=total,
@@ -59,6 +69,8 @@ async def list_users(
     )
 
 
+# GET /admin/users/stats -- Returns aggregate user statistics for the
+# admin dashboard (e.g. total users, active users, new registrations).
 @router.get(
     "/stats",
     name="admin:user-stats",
@@ -70,10 +82,13 @@ async def get_user_stats(
     account_repo: AccountCRUDRepository = Depends(get_repository(repo_type=AccountCRUDRepository)),
 ) -> AdminDashboardStats:
     """Get user statistics for admin dashboard"""
+    # Retrieve aggregate stats from the account repository and map to response schema
     stats = await account_repo.get_stats()
     return AdminDashboardStats(**stats)
 
 
+# GET /admin/users/{user_id} -- Retrieve a single user's full account details
+# by their numeric ID. Returns 404 if the user does not exist.
 @router.get(
     "/{user_id}",
     name="admin:get-user",
@@ -86,7 +101,9 @@ async def get_user(
     account_repo: AccountCRUDRepository = Depends(get_repository(repo_type=AccountCRUDRepository)),
 ) -> AdminAccountView:
     """Get a specific user by ID (admin only)"""
+    # Look up the account by primary key
     account = await account_repo.read_account_by_id(id=user_id)
+    # Return 404 if no matching account exists
     if not account:
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_404_NOT_FOUND,

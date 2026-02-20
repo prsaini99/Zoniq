@@ -1,6 +1,11 @@
 """
 Admin Seat Management APIs
 """
+# Admin seat management routes -- provides endpoints for creating, updating,
+# blocking/unblocking, and deleting individual seats as well as bulk seat
+# creation. Also includes a maintenance endpoint for releasing expired
+# seat locks. All mutating operations are audit-logged.
+
 from typing import Annotated
 
 import fastapi
@@ -24,6 +29,8 @@ from src.services.admin_log_service import AdminLogService
 router = fastapi.APIRouter(prefix="/seats", tags=["admin-seats"])
 
 
+# Helper to convert a Seat ORM model into SeatResponse, mapping fields
+# like seat_number, row_name, section, status, and position coordinates.
 def _build_seat_response(seat) -> SeatResponse:
     """Build SeatResponse from Seat model"""
     return SeatResponse(
@@ -43,6 +50,9 @@ def _build_seat_response(seat) -> SeatResponse:
 # ==================== Seat Management ====================
 
 
+# GET /admin/seats/event/{event_id} -- List all seats for an event.
+# Supports optional filtering by category_id and seat status.
+# Does not eager-load the category relationship for performance.
 @router.get(
     "/event/{event_id}",
     name="admin:seats:list",
@@ -69,6 +79,9 @@ async def list_event_seats(
     return [_build_seat_response(seat) for seat in seats]
 
 
+# GET /admin/seats/event/{event_id}/counts -- Returns a breakdown of
+# seat counts grouped by status (available, locked, booked, blocked)
+# for a given event. Useful for monitoring seat inventory.
 @router.get(
     "/event/{event_id}/counts",
     name="admin:seats:counts",
@@ -86,6 +99,8 @@ async def get_seat_counts(
     return await seat_repo.get_seat_counts_by_event(event_id=event_id)
 
 
+# POST /admin/seats/event/{event_id} -- Create a single seat for an event,
+# specifying its category, row, section, position, etc.
 @router.post(
     "/event/{event_id}",
     name="admin:seats:create",
@@ -120,6 +135,10 @@ async def create_seat(
     return _build_seat_response(seat)
 
 
+# POST /admin/seats/event/{event_id}/bulk -- Bulk-create multiple seats
+# for an event by specifying row names and seats per row. For example,
+# rows=["A","B","C"] with seats_per_row=10 creates 30 seats (A1-A10,
+# B1-B10, C1-C10). Returns the count of seats created.
 @router.post(
     "/event/{event_id}/bulk",
     name="admin:seats:bulk-create",
@@ -151,6 +170,7 @@ async def bulk_create_seats(
     }
     ```
     """
+    # Generate and persist all seats based on the row/seat-per-row configuration
     seats = await seat_repo.bulk_create_seats(event_id=event_id, bulk_create=bulk_create)
 
     # Log admin action
@@ -174,6 +194,7 @@ async def bulk_create_seats(
     }
 
 
+# GET /admin/seats/{seat_id} -- Retrieve a single seat by its ID.
 @router.get(
     "/{seat_id}",
     name="admin:seats:get",
@@ -192,6 +213,8 @@ async def get_seat(
     return _build_seat_response(seat)
 
 
+# PATCH /admin/seats/{seat_id} -- Partially update a seat's properties
+# (e.g. row_name, section, position, category assignment).
 @router.patch(
     "/{seat_id}",
     name="admin:seats:update",
@@ -226,6 +249,9 @@ async def update_seat(
     return _build_seat_response(seat)
 
 
+# POST /admin/seats/{seat_id}/block -- Mark a seat as blocked, removing
+# it from sale. Useful for reserving seats for VIPs, holding seats for
+# accessibility, or temporarily removing damaged seats from inventory.
 @router.post(
     "/{seat_id}/block",
     name="admin:seats:block",
@@ -259,6 +285,8 @@ async def block_seat(
     return _build_seat_response(seat)
 
 
+# POST /admin/seats/{seat_id}/unblock -- Remove the block from a seat,
+# returning it to available status so it can be sold again.
 @router.post(
     "/{seat_id}/unblock",
     name="admin:seats:unblock",
@@ -292,6 +320,9 @@ async def unblock_seat(
     return _build_seat_response(seat)
 
 
+# POST /admin/seats/{seat_id}/release -- Admin override to forcibly
+# release a seat that is currently locked by a user's in-progress
+# booking. This bypasses the normal lock expiration mechanism.
 @router.post(
     "/{seat_id}/release",
     name="admin:seats:release",
@@ -310,6 +341,7 @@ async def force_release_seat(
     ),
 ) -> SeatResponse:
     """Force release a locked seat (admin override)"""
+    # Unlock the seat first, then re-fetch the updated seat record
     await seat_repo.unlock_seats(seat_ids=[seat_id])
     seat = await seat_repo.read_seat_by_id(seat_id=seat_id)
 
@@ -326,6 +358,9 @@ async def force_release_seat(
     return _build_seat_response(seat)
 
 
+# DELETE /admin/seats/{seat_id} -- Permanently delete a seat record.
+# Only allowed when the seat is in available or blocked status; seats
+# that have been booked cannot be deleted.
 @router.delete(
     "/{seat_id}",
     name="admin:seats:delete",
@@ -363,6 +398,10 @@ async def delete_seat(
     return {"message": f"Seat '{seat_label}' deleted successfully"}
 
 
+# POST /admin/seats/release-expired -- Maintenance endpoint that scans
+# all seats for expired temporary locks and releases them back to available
+# status. Locks expire when a user's booking session times out without
+# completing payment. Returns the number of locks released.
 @router.post(
     "/release-expired",
     name="admin:seats:release-expired",

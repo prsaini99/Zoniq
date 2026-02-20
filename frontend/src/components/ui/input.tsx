@@ -1,3 +1,14 @@
+/**
+ * Input - A styled, accessible form input component with built-in support for:
+ * - Optional label above the input.
+ * - Left and right icon slots.
+ * - Password visibility toggle (show/hide eye icon).
+ * - Error state with red border highlight and error message text.
+ * - Helper text displayed below the input when there is no error.
+ *
+ * Uses React.forwardRef for ref forwarding (compatible with form libraries like react-hook-form).
+ * Auto-generates an id via React.useId if none is provided, ensuring label-input association.
+ */
 "use client";
 
 import * as React from "react";
@@ -28,12 +39,15 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     },
     ref
   ) => {
+    // Local state for toggling password visibility
     const [showPassword, setShowPassword] = React.useState(false);
+    // Generate a stable unique id if none is provided
     const inputId = id || React.useId();
     const isPassword = type === "password";
 
     return (
       <div className="w-full space-y-2">
+        {/* Optional label, linked to the input via htmlFor */}
         {label && (
           <label
             htmlFor={inputId}
@@ -43,6 +57,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           </label>
         )}
         <div className="relative group">
+          {/* Left icon slot - changes color when input is focused */}
           {leftIcon && (
             <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-foreground-subtle group-focus-within:text-foreground-muted transition-colors">
               {leftIcon}
@@ -64,6 +79,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             {...props}
           />
+          {/* Password toggle button - switches between Eye and EyeOff icons */}
           {isPassword && (
             <button
               type="button"
@@ -78,15 +94,18 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               )}
             </button>
           )}
+          {/* Right icon slot (only rendered for non-password inputs) */}
           {!isPassword && rightIcon && (
             <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-foreground-subtle">
               {rightIcon}
             </div>
           )}
         </div>
+        {/* Error message (takes priority over helper text) */}
         {error && (
           <p className="text-xs text-error font-medium">{error}</p>
         )}
+        {/* Helper text shown when there is no error */}
         {!error && helperText && (
           <p className="text-xs text-foreground-subtle">{helperText}</p>
         )}

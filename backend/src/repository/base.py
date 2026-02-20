@@ -1,3 +1,7 @@
+# Model registration module -- imports all ORM models so that SQLAlchemy's Base.metadata
+# is aware of every table before create_all() or Alembic migrations run.
+# Without these imports, tables would not be registered in the metadata.
+
 from src.models.db.account import Account
 from src.models.db.otp import OTPCode
 from src.models.db.user_device import UserDevice

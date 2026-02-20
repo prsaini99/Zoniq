@@ -1,3 +1,7 @@
+# Seat CRUD repository -- manages individual seat records for events with assigned
+# seating. Handles creation (single and bulk), retrieval, locking/unlocking during
+# checkout, booking/unbooking, admin blocking, deletion, and seat count aggregation.
+
 import datetime
 import typing
 
@@ -13,6 +17,8 @@ from src.utilities.exceptions.database import EntityDoesNotExist
 
 class SeatCRUDRepository(BaseCRUDRepository):
 
+    # Creates a single seat for an event with the specified category, number, row,
+    # section, and optional position coordinates. Defaults to AVAILABLE status.
     async def create_seat(
         self,
         event_id: int,
@@ -36,6 +42,9 @@ class SeatCRUDRepository(BaseCRUDRepository):
 
         return new_seat
 
+    # Bulk-creates seats by generating a grid of rows x seats_per_row.
+    # Each row letter gets seats numbered 1 through seats_per_row, all in the
+    # same category and section. Useful for initial venue setup.
     async def bulk_create_seats(
         self,
         event_id: int,
@@ -43,6 +52,7 @@ class SeatCRUDRepository(BaseCRUDRepository):
     ) -> list[Seat]:
         """Bulk create seats for an event"""
         seats = []
+        # Iterate over each row (e.g., ["A", "B", "C"]) and create numbered seats.
         for row in bulk_create.rows:
             for seat_num in range(1, bulk_create.seats_per_row + 1):
                 seat = Seat(
@@ -64,6 +74,8 @@ class SeatCRUDRepository(BaseCRUDRepository):
 
         return seats
 
+    # Fetches a single seat by ID with its category relationship eager-loaded.
+    # Raises EntityDoesNotExist if the seat is not found.
     async def read_seat_by_id(self, seat_id: int) -> Seat:
         """Get a seat by ID"""
         stmt = (
@@ -79,6 +91,8 @@ class SeatCRUDRepository(BaseCRUDRepository):
 
         return seat
 
+    # Retrieves all seats for an event with optional filters by category and status.
+    # Results are ordered by section, row, and seat number for a natural layout order.
     async def read_seats_by_event(
         self,
         event_id: int,
@@ -98,11 +112,15 @@ class SeatCRUDRepository(BaseCRUDRepository):
         if status:
             stmt = stmt.where(Seat.status == status)
 
+        # Order by section, row, and seat number for consistent display.
         stmt = stmt.order_by(Seat.section, Seat.row_name, Seat.seat_number)
 
         query = await self.async_session.execute(statement=stmt)
         return query.scalars().unique().all()
 
+    # Returns seats that are currently bookable: either AVAILABLE or LOCKED with
+    # an expired lock (lock_until has passed). Expired locks are treated as available
+    # since the lock holder's session timed out.
     async def read_available_seats_by_event(
         self,
         event_id: int,
@@ -111,6 +129,7 @@ class SeatCRUDRepository(BaseCRUDRepository):
         """Get available seats for an event"""
         now = datetime.datetime.now(datetime.timezone.utc)
 
+        # Include seats that are AVAILABLE or have an expired lock.
         stmt = sqlalchemy.select(Seat).where(
             Seat.event_id == event_id,
             sqlalchemy.or_(
@@ -130,6 +149,8 @@ class SeatCRUDRepository(BaseCRUDRepository):
         query = await self.async_session.execute(statement=stmt)
         return query.scalars().all()
 
+    # Updates seat metadata (number, row, section, position, etc.) using only
+    # the fields provided in the update schema.
     async def update_seat(
         self,
         seat_id: int,
@@ -153,6 +174,9 @@ class SeatCRUDRepository(BaseCRUDRepository):
 
         return await self.read_seat_by_id(seat_id=seat_id)
 
+    # Locks multiple seats for a user during checkout. Only locks seats that are
+    # currently AVAILABLE or have an expired lock. Returns the list of seats that
+    # were successfully locked by this user (some may fail if grabbed by another user).
     async def lock_seats(
         self,
         seat_ids: list[int],
@@ -164,6 +188,7 @@ class SeatCRUDRepository(BaseCRUDRepository):
         lock_until = now + datetime.timedelta(minutes=lock_duration_minutes)
 
         # Update seats that are available or have expired locks
+        # This uses a WHERE clause to atomically only lock eligible seats.
         stmt = (
             sqlalchemy.update(Seat)
             .where(
@@ -187,6 +212,7 @@ class SeatCRUDRepository(BaseCRUDRepository):
         await self.async_session.commit()
 
         # Return the locked seats
+        # Verify each seat was actually locked by checking status and locked_by.
         locked_seats = []
         for seat_id in seat_ids:
             try:
@@ -198,6 +224,8 @@ class SeatCRUDRepository(BaseCRUDRepository):
 
         return locked_seats
 
+    # Releases locks on the specified seats, optionally filtered by the locking user.
+    # Returns the number of seats that were actually unlocked.
     async def unlock_seats(
         self,
         seat_ids: list[int],
@@ -218,6 +246,7 @@ class SeatCRUDRepository(BaseCRUDRepository):
             )
         )
 
+        # If user_id is provided, only unlock seats locked by that specific user.
         if user_id:
             stmt = stmt.where(Seat.locked_by == user_id)
 
@@ -226,6 +255,9 @@ class SeatCRUDRepository(BaseCRUDRepository):
 
         return result.rowcount
 
+    # Batch-releases all expired seat locks across the system.
+    # Intended to be called by a periodic background task / cron job.
+    # Returns the number of seats that were released.
     async def release_expired_locks(self) -> int:
         """Release all expired seat locks"""
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -248,6 +280,9 @@ class SeatCRUDRepository(BaseCRUDRepository):
 
         return result.rowcount
 
+    # Marks seats as BOOKED and associates them with a booking ID.
+    # Accepts seats that are either LOCKED or AVAILABLE (in case locks expired
+    # but the booking process completed in time).
     async def book_seats(
         self,
         seat_ids: list[int],
@@ -273,6 +308,8 @@ class SeatCRUDRepository(BaseCRUDRepository):
 
         return result.rowcount
 
+    # Reverses a booking on seats, setting them back to AVAILABLE.
+    # Used when a booking is cancelled or a payment fails.
     async def unbook_seats(
         self,
         seat_ids: list[int],
@@ -295,6 +332,8 @@ class SeatCRUDRepository(BaseCRUDRepository):
 
         return result.rowcount
 
+    # Admin operation: blocks a seat so it cannot be sold (e.g., damaged seat,
+    # reserved for staff). Sets status to BLOCKED.
     async def block_seat(self, seat_id: int) -> Seat:
         """Block a seat (admin only - not for sale)"""
         stmt = (
@@ -310,6 +349,8 @@ class SeatCRUDRepository(BaseCRUDRepository):
 
         return await self.read_seat_by_id(seat_id=seat_id)
 
+    # Reverses admin blocking, returning the seat to AVAILABLE status.
+    # Only applies to seats that are currently BLOCKED.
     async def unblock_seat(self, seat_id: int) -> Seat:
         """Unblock a seat"""
         stmt = (
@@ -328,6 +369,8 @@ class SeatCRUDRepository(BaseCRUDRepository):
 
         return await self.read_seat_by_id(seat_id=seat_id)
 
+    # Permanently deletes a seat. Only AVAILABLE or BLOCKED seats can be deleted;
+    # locked or booked seats are protected to prevent data integrity issues.
     async def delete_seat(self, seat_id: int) -> bool:
         """Delete a seat (only if available)"""
         seat = await self.read_seat_by_id(seat_id=seat_id)
@@ -341,6 +384,8 @@ class SeatCRUDRepository(BaseCRUDRepository):
 
         return True
 
+    # Deletes all seats for an event. Used when an event is deleted or when
+    # the seating layout needs to be completely reconfigured.
     async def delete_seats_by_event(self, event_id: int) -> int:
         """Delete all seats for an event"""
         stmt = sqlalchemy.delete(Seat).where(Seat.event_id == event_id)
@@ -349,6 +394,9 @@ class SeatCRUDRepository(BaseCRUDRepository):
 
         return result.rowcount
 
+    # Aggregates seat counts grouped by status for a given event.
+    # Returns a dictionary with counts for each SeatStatus value, initialized
+    # to zero so all statuses are always present in the result.
     async def get_seat_counts_by_event(self, event_id: int) -> dict:
         """Get seat counts by status for an event"""
         stmt = (
@@ -362,6 +410,7 @@ class SeatCRUDRepository(BaseCRUDRepository):
         result = await self.async_session.execute(statement=stmt)
         rows = result.all()
 
+        # Initialize all possible statuses to zero, then fill in actual counts.
         counts = {status.value: 0 for status in SeatStatus}
         for row in rows:
             counts[row.status] = row.count

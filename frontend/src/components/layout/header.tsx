@@ -1,3 +1,18 @@
+/**
+ * Header - The site-wide sticky navigation header.
+ *
+ * Renders:
+ * - The brand logo (links to home).
+ * - Desktop nav links (Events, About, Contact) with an active-state underline.
+ * - For authenticated users: admin dashboard shortcut (if admin), quick-action
+ *   icons (My Tickets, Wishlist), and a profile dropdown with user info,
+ *   navigation links, and sign-out.
+ * - For guests: Sign In and Get Started buttons.
+ * - A mobile hamburger menu that slides open with the same links plus
+ *   user info, admin section (if admin), and sign-out.
+ *
+ * Auth state is read from the Zustand auth store (useAuthStore, useIsAuthenticated, useIsAdmin).
+ */
 "use client";
 
 import Link from "next/link";
@@ -19,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuthStore, useIsAuthenticated, useIsAdmin } from "@/store/auth";
 
+// Top-level navigation links rendered in both desktop and mobile menus
 const navLinks = [
   { href: "/events", label: "Events" },
   { href: "/about", label: "About" },
@@ -26,13 +42,16 @@ const navLinks = [
 ];
 
 export function Header() {
+  // Mobile menu open/close state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // Desktop profile dropdown open/close state
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const pathname = usePathname();
   const isAuthenticated = useIsAuthenticated();
   const isAdmin = useIsAdmin();
   const { user, logout } = useAuthStore();
 
+  // Handles logging out and closing the profile dropdown
   const handleLogout = async () => {
     await logout();
     setIsProfileOpen(false);
@@ -41,12 +60,12 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full glass-strong">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
-        {/* Logo */}
+        {/* Brand Logo */}
         <Link href="/" className="flex items-center group">
           <Image src="/zoniq-logo.png" alt="ZONIQ" width={120} height={40} className="h-8 w-auto transition-transform duration-300 group-hover:scale-105" priority />
         </Link>
 
-        {/* Desktop Navigation */}
+        {/* Desktop Navigation Links */}
         <nav className="hidden md:flex items-center gap-1">
           {navLinks.map((link) => (
             <Link
@@ -60,6 +79,7 @@ export function Header() {
               )}
             >
               {link.label}
+              {/* Active indicator: small primary-colored bar under the link */}
               {pathname === link.href && (
                 <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-primary rounded-full" />
               )}
@@ -67,11 +87,11 @@ export function Header() {
           ))}
         </nav>
 
-        {/* Desktop Actions */}
+        {/* Desktop Action Buttons (right side) */}
         <div className="hidden md:flex items-center gap-3">
           {isAuthenticated ? (
             <>
-              {/* Admin Quick Actions */}
+              {/* Admin Dashboard Shortcut (visible only to admins) */}
               {isAdmin && (
                 <Link
                   href="/admin"
@@ -88,7 +108,7 @@ export function Header() {
                 </Link>
               )}
 
-              {/* Quick Action Icons */}
+              {/* Quick Action Icons: My Tickets and Wishlist */}
               <div className="flex items-center gap-0.5">
                 <Link
                   href="/my-tickets"
@@ -116,10 +136,10 @@ export function Header() {
                 </Link>
               </div>
 
-              {/* Divider */}
+              {/* Vertical Divider */}
               <div className="h-6 w-px bg-border" />
 
-              {/* Profile Dropdown */}
+              {/* Profile Dropdown Trigger and Menu */}
               <div className="relative">
                 <button
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
@@ -130,6 +150,7 @@ export function Header() {
                       : "hover:bg-foreground/5"
                   )}
                 >
+                  {/* User avatar circle with first-letter initial */}
                   <div className={cn(
                     "flex h-8 w-8 items-center justify-center rounded-lg font-bold text-sm",
                     isAdmin
@@ -140,6 +161,7 @@ export function Header() {
                       user?.username?.[0]?.toUpperCase() ||
                       "U"}
                   </div>
+                  {/* Username and role label (hidden on smaller screens) */}
                   <div className="hidden lg:block text-left">
                     <p className="text-sm font-semibold text-foreground leading-tight">
                       {user?.fullName || user?.username}
@@ -160,15 +182,16 @@ export function Header() {
                   />
                 </button>
 
-                {/* Dropdown Menu */}
+                {/* Profile Dropdown Menu */}
                 {isProfileOpen && (
                   <>
+                    {/* Invisible overlay to close dropdown on outside click */}
                     <div
                       className="fixed inset-0 z-10"
                       onClick={() => setIsProfileOpen(false)}
                     />
                     <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-border bg-background-card py-1.5 shadow-card-hover z-20 animate-scale-in origin-top-right">
-                      {/* User Info */}
+                      {/* User Info Header */}
                       <div className="px-4 py-3 border-b border-border">
                         <div className="flex items-center gap-3">
                           <div className={cn(
@@ -199,7 +222,7 @@ export function Header() {
                         </div>
                       </div>
 
-                      {/* Menu Items */}
+                      {/* Navigation Menu Items */}
                       <div className="py-1">
                         {[
                           { href: "/profile", icon: User, label: "My Profile" },
@@ -224,7 +247,7 @@ export function Header() {
                         ))}
                       </div>
 
-                      {/* Admin Section */}
+                      {/* Admin Section (visible only to admins) */}
                       {isAdmin && (
                         <div className="border-t border-border py-1">
                           <Link
@@ -238,7 +261,7 @@ export function Header() {
                         </div>
                       )}
 
-                      {/* Logout */}
+                      {/* Logout Button */}
                       <div className="border-t border-border py-1">
                         <button
                           onClick={handleLogout}
@@ -254,6 +277,7 @@ export function Header() {
               </div>
             </>
           ) : (
+            // Guest buttons: Sign In and Get Started
             <div className="flex items-center gap-2">
               <Link href="/login">
                 <Button variant="ghost" className="text-foreground-muted">Sign In</Button>
@@ -265,7 +289,7 @@ export function Header() {
           )}
         </div>
 
-        {/* Mobile Menu Button */}
+        {/* Mobile Menu Toggle Button */}
         <button
           onClick={() => setIsMenuOpen(!isMenuOpen)}
           className="md:hidden p-2 rounded-lg text-foreground-muted hover:text-foreground hover:bg-foreground/5 transition-all duration-200"
@@ -274,11 +298,11 @@ export function Header() {
         </button>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile Menu (slides down below header) */}
       {isMenuOpen && (
         <div className="md:hidden border-t border-border/50 bg-background-soft animate-fade-in">
           <nav className="container mx-auto px-4 py-4 space-y-1">
-            {/* User Info (if authenticated) */}
+            {/* Authenticated user info banner at top of mobile menu */}
             {isAuthenticated && (
               <div className={cn(
                 "flex items-center gap-3 px-4 py-3 mb-3 rounded-xl",
@@ -314,7 +338,7 @@ export function Header() {
               </div>
             )}
 
-            {/* Navigation Links */}
+            {/* Main Navigation Links */}
             {navLinks.map((link) => (
               <Link
                 key={link.href}
@@ -331,7 +355,7 @@ export function Header() {
               </Link>
             ))}
 
-            {/* Authenticated User Menu */}
+            {/* Authenticated User Menu Items */}
             {isAuthenticated && (
               <>
                 <div className="my-3 border-t border-border/50" />
@@ -357,6 +381,7 @@ export function Header() {
                   </Link>
                 ))}
 
+                {/* Admin section in mobile menu (visible only to admins) */}
                 {isAdmin && (
                   <>
                     <div className="my-3 border-t border-border/50" />
@@ -374,6 +399,7 @@ export function Header() {
                   </>
                 )}
 
+                {/* Sign Out button */}
                 <div className="my-3 border-t border-border/50" />
                 <button
                   onClick={() => {
@@ -388,7 +414,7 @@ export function Header() {
               </>
             )}
 
-            {/* Guest User Menu */}
+            {/* Guest User: Sign In / Get Started buttons */}
             {!isAuthenticated && (
               <div className="pt-4 border-t border-border/50 space-y-2">
                 <Link href="/login" onClick={() => setIsMenuOpen(false)}>

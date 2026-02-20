@@ -8,6 +8,7 @@ import fastapi
 from src.utilities.messages.exceptions.http.exc_details import http_401_unauthorized_details
 
 
+# Raise a 401 error when the request lacks valid authentication credentials
 async def http_exc_401_cunauthorized_request() -> Exception:
     return fastapi.HTTPException(
         status_code=fastapi.status.HTTP_400_BAD_REQUEST,

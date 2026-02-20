@@ -1,3 +1,13 @@
+/**
+ * AdminLayout - Root layout wrapper for all admin pages.
+ *
+ * Responsibilities:
+ * - Enforces authentication and admin role access control.
+ * - Renders a responsive sidebar navigation with collapsible state.
+ * - Provides a mobile hamburger menu with an overlay.
+ * - Displays the current admin user info and a sign-out button.
+ * - Wraps all admin child pages via the {children} slot.
+ */
 "use client";
 
 import { useEffect } from "react";
@@ -20,6 +30,7 @@ import { useUser, useIsAuthenticated, useAuthStore, useHasHydrated } from "@/sto
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
+// Sidebar navigation items: each maps an icon + label to an admin route
 const navItems = [
   { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/admin/events", icon: Calendar, label: "Events" },
@@ -41,9 +52,12 @@ export default function AdminLayout({
   const isAuthenticated = useIsAuthenticated();
   const hasHydrated = useHasHydrated();
   const { logout } = useAuthStore();
+  // Controls whether the desktop sidebar is collapsed to icon-only mode
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Controls whether the mobile slide-out menu is visible
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Auth guard: redirect unauthenticated users to login, non-admins to home
   useEffect(() => {
     if (!hasHydrated) return;
 
@@ -56,6 +70,7 @@ export default function AdminLayout({
     }
   }, [hasHydrated, isAuthenticated, user, router]);
 
+  // Show a loading spinner while the auth store is hydrating or if the user is not an admin
   if (!hasHydrated || !user || user.role !== "admin") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -64,13 +79,14 @@ export default function AdminLayout({
     );
   }
 
+  // Calls the auth store logout action to clear tokens and user state
   const handleSignOut = async () => {
     await logout();
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mobile Header */}
+      {/* Mobile Header - fixed top bar visible only on small screens */}
       <div className="lg:hidden fixed top-0 left-0 right-0 h-14 glass-strong z-50 flex items-center justify-between px-4">
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -82,10 +98,11 @@ export default function AdminLayout({
           <Image src="/zoniq-logo.png" alt="ZONIQ" width={100} height={32} className="h-6 w-auto" />
           <span className="text-[10px] font-bold text-foreground-subtle uppercase tracking-widest">Admin</span>
         </Link>
+        {/* Spacer to center the logo */}
         <div className="w-9" />
       </div>
 
-      {/* Mobile Sidebar Overlay */}
+      {/* Mobile Sidebar Overlay - semi-transparent backdrop that closes the menu on click */}
       {mobileMenuOpen && (
         <div
           className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
@@ -93,7 +110,7 @@ export default function AdminLayout({
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - slides in on mobile, always visible on desktop (collapsible) */}
       <aside
         className={cn(
           "fixed top-0 left-0 h-full bg-background-soft border-r border-border/50 z-50 transition-all duration-300",
@@ -102,7 +119,7 @@ export default function AdminLayout({
         )}
       >
         <div className="flex flex-col h-full">
-          {/* Logo */}
+          {/* Logo area with collapse toggle */}
           <div className="h-14 flex items-center justify-between px-4 border-b border-border/50">
             {!sidebarCollapsed && (
               <Link href="/admin" className="flex items-center gap-2">
@@ -110,6 +127,7 @@ export default function AdminLayout({
                 <span className="text-[10px] font-bold text-foreground-subtle uppercase tracking-widest">Admin</span>
               </Link>
             )}
+            {/* Collapse/expand toggle button, visible only on desktop */}
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
               className="hidden lg:flex p-1.5 rounded-lg hover:bg-foreground/5 transition-colors"
@@ -123,7 +141,7 @@ export default function AdminLayout({
             </button>
           </div>
 
-          {/* Navigation */}
+          {/* Navigation links - active item is determined by matching the current pathname */}
           <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
             {navItems.map((item) => {
               const isActive = pathname === item.href ||
@@ -147,7 +165,7 @@ export default function AdminLayout({
             })}
           </nav>
 
-          {/* User Info & Logout */}
+          {/* User Info & Logout section at the bottom of the sidebar */}
           <div className="p-3 border-t border-border/50">
             {!sidebarCollapsed && (
               <div className="mb-2 px-3 py-2">
@@ -170,7 +188,7 @@ export default function AdminLayout({
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* Main Content area - adjusts left padding based on sidebar collapse state */}
       <main
         className={cn(
           "min-h-screen pt-14 lg:pt-0 transition-all duration-300",

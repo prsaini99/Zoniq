@@ -1,3 +1,19 @@
+/**
+ * CreateEventPage - Admin form for creating a new event.
+ *
+ * Layout:
+ * - Left column (2/3): Basic info (title, slug, category, venue, descriptions),
+ *   date/time pickers (event start/end, booking window), and organizer details.
+ * - Right sidebar (1/3): Settings (max tickets, featured toggle), image URLs,
+ *   and the submit button.
+ *
+ * Key behaviors:
+ * - Fetches all venues on mount for the venue dropdown.
+ * - Auto-generates a URL slug from the title.
+ * - Submits via POST to /admin/events; only sends non-empty optional fields.
+ * - On success, redirects to the edit page so the admin can add seat categories.
+ * - The event is created in "draft" status.
+ */
 "use client";
 
 import { useState, useEffect } from "react";
@@ -13,12 +29,14 @@ import {
 import { Button, Card, CardContent } from "@/components/ui";
 import api from "@/lib/api";
 
+// Venue dropdown option shape
 interface Venue {
   id: number;
   name: string;
   city: string | null;
 }
 
+// Shape of the form data managed by local state
 interface EventFormData {
   title: string;
   slug: string;
@@ -38,6 +56,7 @@ interface EventFormData {
   thumbnail_image_url: string;
 }
 
+// Available event category options for the select dropdown
 const CATEGORIES = [
   { value: "concert", label: "Concert" },
   { value: "sports", label: "Sports" },
@@ -50,6 +69,7 @@ const CATEGORIES = [
   { value: "other", label: "Other" },
 ];
 
+// Default empty form values
 const initialFormData: EventFormData = {
   title: "",
   slug: "",
@@ -77,6 +97,7 @@ export default function CreateEventPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch all venues on mount for the venue selector
   useEffect(() => {
     const fetchVenues = async () => {
       setIsLoading(true);
@@ -92,7 +113,7 @@ export default function CreateEventPage() {
     fetchVenues();
   }, []);
 
-  // Auto-generate slug from title
+  // Auto-generate slug from title (lowercase, hyphens, strip leading/trailing hyphens)
   useEffect(() => {
     if (formData.title) {
       const slug = formData.title
@@ -103,6 +124,7 @@ export default function CreateEventPage() {
     }
   }, [formData.title]);
 
+  // Form submission handler: builds a cleaned payload and POSTs to the admin API
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -132,6 +154,7 @@ export default function CreateEventPage() {
       if (formData.thumbnail_image_url) cleanedData.thumbnail_image_url = formData.thumbnail_image_url;
 
       const res = await api.post("/admin/events", cleanedData);
+      // Redirect to the edit page so the admin can add seat categories
       router.push(`/admin/events/${res.data.id}/edit`);
     } catch (err: any) {
       setError(err.message || "Failed to create event");
@@ -140,6 +163,7 @@ export default function CreateEventPage() {
     }
   };
 
+  // Generic change handler for text inputs, selects, textareas, and checkboxes
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -150,6 +174,7 @@ export default function CreateEventPage() {
     }));
   };
 
+  // Show spinner while venues are loading
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -160,7 +185,7 @@ export default function CreateEventPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Page Header with back navigation */}
       <div className="flex items-center gap-4">
         <Link href="/admin/events">
           <Button variant="ghost" size="sm">
@@ -174,23 +199,24 @@ export default function CreateEventPage() {
         </div>
       </div>
 
-      {/* Error Message */}
+      {/* Error Message Banner */}
       {error && (
         <div className="p-4 bg-error/10 border border-error/20 rounded-lg text-error">
           {error}
         </div>
       )}
 
-      {/* Form */}
+      {/* Event Creation Form */}
       <form onSubmit={handleSubmit}>
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Main Content */}
+          {/* Main Content Column (left 2/3) */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Basic Info */}
+            {/* Basic Information Section */}
             <Card>
               <CardContent className="p-6 space-y-4">
                 <h2 className="text-lg font-semibold text-foreground">Basic Information</h2>
 
+                {/* Event Title (required) */}
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
                     Event Title *
@@ -206,6 +232,7 @@ export default function CreateEventPage() {
                   />
                 </div>
 
+                {/* URL Slug (auto-generated from title, editable) */}
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
                     URL Slug
@@ -223,6 +250,7 @@ export default function CreateEventPage() {
                   </p>
                 </div>
 
+                {/* Category and Venue selectors side by side */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
@@ -243,6 +271,7 @@ export default function CreateEventPage() {
                     </select>
                   </div>
 
+                  {/* Venue selector populated from the fetched venues list */}
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
                       Venue
@@ -268,6 +297,7 @@ export default function CreateEventPage() {
                   </div>
                 </div>
 
+                {/* Short Description (for event cards) */}
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
                     Short Description
@@ -282,6 +312,7 @@ export default function CreateEventPage() {
                   />
                 </div>
 
+                {/* Full Description */}
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
                     Full Description
@@ -298,11 +329,12 @@ export default function CreateEventPage() {
               </CardContent>
             </Card>
 
-            {/* Date & Time */}
+            {/* Date & Time Section */}
             <Card>
               <CardContent className="p-6 space-y-4">
                 <h2 className="text-lg font-semibold text-foreground">Date & Time</h2>
 
+                {/* Event start and end datetime pickers */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
@@ -332,6 +364,7 @@ export default function CreateEventPage() {
                   </div>
                 </div>
 
+                {/* Booking window start and end datetime pickers */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
@@ -364,7 +397,7 @@ export default function CreateEventPage() {
               </CardContent>
             </Card>
 
-            {/* Organizer */}
+            {/* Organizer Details Section */}
             <Card>
               <CardContent className="p-6 space-y-4">
                 <h2 className="text-lg font-semibold text-foreground">Organizer Details</h2>
@@ -402,9 +435,9 @@ export default function CreateEventPage() {
             </Card>
           </div>
 
-          {/* Sidebar */}
+          {/* Sidebar Column (right 1/3) */}
           <div className="space-y-6">
-            {/* Settings */}
+            {/* Settings Card: max tickets per booking and featured toggle */}
             <Card>
               <CardContent className="p-6 space-y-4">
                 <h2 className="text-lg font-semibold text-foreground">Settings</h2>
@@ -439,7 +472,7 @@ export default function CreateEventPage() {
               </CardContent>
             </Card>
 
-            {/* Images */}
+            {/* Images Card: banner and thumbnail URL inputs */}
             <Card>
               <CardContent className="p-6 space-y-4">
                 <h2 className="text-lg font-semibold text-foreground">Images</h2>
@@ -474,7 +507,7 @@ export default function CreateEventPage() {
               </CardContent>
             </Card>
 
-            {/* Actions */}
+            {/* Submit Actions Card */}
             <Card>
               <CardContent className="p-6 space-y-3">
                 <Button

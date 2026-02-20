@@ -1,3 +1,14 @@
+/*
+ * Home page (landing page) for ZONIQ.
+ * Displays a hero section, event category browser, upcoming events grid,
+ * platform feature highlights, and a call-to-action section.
+ *
+ * Key behavior:
+ *   - Admin users are redirected to /admin.
+ *   - Upcoming events are fetched from the API on mount (limited to 6).
+ *   - Skeleton loaders are shown while events load.
+ */
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -18,6 +29,7 @@ import { eventsApi } from "@/lib/api";
 import { useIsAdmin, useIsAuthenticated } from "@/store/auth";
 import type { Event } from "@/types";
 
+// Platform feature cards displayed in the "Why Choose ZONIQ?" section
 const features = [
   {
     icon: Shield,
@@ -45,6 +57,7 @@ const features = [
   },
 ];
 
+// Event categories for the "Browse by Category" quick-link grid
 const categories = [
   { value: "concert", label: "Concerts", emoji: "🎵" },
   { value: "sports", label: "Sports", emoji: "⚽" },
@@ -68,6 +81,7 @@ export default function HomePage() {
     }
   }, [isAuthenticated, isAdmin, router]);
 
+  // Fetch the 6 most recent upcoming events from the API on mount
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -97,7 +111,7 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col">
-      {/* Hero Section */}
+      {/* Hero Section: headline, tagline, and primary CTA buttons */}
       <section className="relative overflow-hidden py-24 md:py-36 lg:py-44">
         {/* Atmospheric background */}
         <div className="absolute inset-0 pointer-events-none">
@@ -147,7 +161,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Categories Section */}
+      {/* Categories Section: clickable category cards linking to filtered event listings */}
       <section className="py-20 relative">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
@@ -179,7 +193,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Upcoming Events Section */}
+      {/* Upcoming Events Section: responsive grid of EventCards with skeleton loaders */}
       <section className="py-20 relative">
         {/* Subtle divider glow */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-px bg-gradient-to-r from-transparent via-border-hover to-transparent" />
@@ -211,6 +225,7 @@ export default function HomePage() {
                 ))}
           </div>
 
+          {/* Empty state: shown when no upcoming events are returned */}
           {!isLoading && upcomingEvents.length === 0 && (
             <div className="text-center py-16">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-foreground/5 mb-6">
@@ -227,7 +242,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Features Section */}
+      {/* Features Section: highlights ZONIQ platform advantages */}
       <section className="py-20 relative">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-px bg-gradient-to-r from-transparent via-border-hover to-transparent" />
 
@@ -264,7 +279,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CTA Section */}
+      {/* CTA Section: gradient banner encouraging users to sign up */}
       <section className="py-24">
         <div className="container mx-auto px-4">
           <div className="relative overflow-hidden rounded-2xl p-10 md:p-16 text-center">

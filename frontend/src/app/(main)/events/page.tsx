@@ -1,3 +1,17 @@
+/*
+ * Events listing page: displays a searchable, filterable, paginated grid of events.
+ *
+ * Key features:
+ *   - Text search with debounced input (300ms delay).
+ *   - Category filter (concert, sports, theater, etc.) and city filter.
+ *   - URL query params are synced with filter state (search, category, city).
+ *   - "Load More" pagination appends additional events to the existing list.
+ *   - Active filter badges with individual clear buttons.
+ *   - Skeleton loaders during initial fetch, inline loader for "Load More".
+ *
+ * Wrapped in Suspense because it reads searchParams via useSearchParams().
+ */
+
 "use client";
 
 import { Suspense, useEffect, useState, useCallback } from "react";
@@ -13,6 +27,7 @@ import type { Event, EventCategory } from "@/types";
 import { CATEGORY_LABELS } from "@/types";
 import { debounce } from "@/lib/utils";
 
+// Available event categories for the filter panel
 const categories: { value: EventCategory; label: string }[] = [
   { value: "concert", label: "Concerts" },
   { value: "sports", label: "Sports" },
@@ -29,11 +44,14 @@ function EventsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Event listing state
   const [events, setEvents] = useState<Event[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Filter state: initialized from URL query params
   const [searchQuery, setSearchQuery] = useState(
     searchParams.get("search") || ""
   );
@@ -43,11 +61,14 @@ function EventsContent() {
   const [selectedCity, setSelectedCity] = useState(
     searchParams.get("city") || ""
   );
+  // Controls visibility of the filter panel
   const [showFilters, setShowFilters] = useState(false);
 
   const pageSize = 12;
+  // Determine if there are more events to load beyond the current page
   const hasMore = events.length < total;
 
+  // Fetch events from the API. If append=true, adds to existing list (for "Load More").
   const fetchEvents = useCallback(
     async (pageNum: number, append = false) => {
       if (append) {
@@ -82,11 +103,12 @@ function EventsContent() {
     [selectedCategory, selectedCity, searchQuery]
   );
 
+  // Re-fetch events from page 1 whenever filters change
   useEffect(() => {
     fetchEvents(1);
   }, [fetchEvents]);
 
-  // Update URL params when filters change
+  // Keep the URL query params in sync with the current filter state
   useEffect(() => {
     const params = new URLSearchParams();
     if (searchQuery) params.set("search", searchQuery);
@@ -99,30 +121,36 @@ function EventsContent() {
     router.replace(newUrl, { scroll: false });
   }, [searchQuery, selectedCategory, selectedCity, router]);
 
+  // Debounced search handler: delays API call by 300ms after last keystroke
   const handleSearch = debounce((value: string) => {
     setSearchQuery(value);
   }, 300);
 
+  // Debounced city filter handler
   const handleCityChange = debounce((value: string) => {
     setSelectedCity(value);
   }, 300);
 
+  // Set or clear the selected category filter
   const handleCategorySelect = (category: string | null) => {
     setSelectedCategory(category);
   };
 
+  // Load the next page of events and append to the grid
   const handleLoadMore = () => {
     if (!isLoadingMore && hasMore) {
       fetchEvents(page + 1, true);
     }
   };
 
+  // Reset all filters to their default (empty) state
   const clearFilters = () => {
     setSearchQuery("");
     setSelectedCategory(null);
     setSelectedCity("");
   };
 
+  // Check if any filter is currently active
   const hasActiveFilters = searchQuery || selectedCategory || selectedCity;
 
   return (
@@ -137,9 +165,10 @@ function EventsContent() {
         </p>
       </div>
 
-      {/* Search & Filters */}
+      {/* Search & Filters bar */}
       <div className="mb-8 space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
+          {/* Search input with debounced handler */}
           <div className="flex-1">
             <Input
               placeholder="Search events..."
@@ -148,6 +177,7 @@ function EventsContent() {
               leftIcon={<Search className="h-4 w-4" />}
             />
           </div>
+          {/* Toggle filters panel button (shows active indicator dot) */}
           <Button
             variant="secondary"
             onClick={() => setShowFilters(!showFilters)}
@@ -160,7 +190,7 @@ function EventsContent() {
           </Button>
         </div>
 
-        {/* Filters Panel */}
+        {/* Expandable Filters Panel: city input and category selection chips */}
         {showFilters && (
           <div className="p-5 rounded-xl border border-border bg-background-card space-y-5 animate-scale-in">
             <div className="flex items-center justify-between">
@@ -188,7 +218,7 @@ function EventsContent() {
               />
             </div>
 
-            {/* Categories */}
+            {/* Category chip buttons: "All" + each category */}
             <div>
               <label className="block text-xs font-medium text-foreground-subtle mb-3 uppercase tracking-wider">
                 Categories
@@ -222,7 +252,7 @@ function EventsContent() {
           </div>
         )}
 
-        {/* Active Filters */}
+        {/* Active Filters: badge pills for each active filter with individual clear buttons */}
         {hasActiveFilters && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-foreground-subtle font-medium uppercase tracking-wider">
@@ -265,7 +295,7 @@ function EventsContent() {
         )}
       </div>
 
-      {/* Results count */}
+      {/* Results count indicator */}
       <div className="mb-6 text-xs text-foreground-subtle font-medium uppercase tracking-wider">
         {!isLoading && (
           <span>
@@ -274,7 +304,7 @@ function EventsContent() {
         )}
       </div>
 
-      {/* Events Grid */}
+      {/* Events Grid: skeleton loaders while loading, event cards otherwise */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {Array.from({ length: 8 }).map((_, i) => (
@@ -289,7 +319,7 @@ function EventsContent() {
             ))}
           </div>
 
-          {/* Load More */}
+          {/* Load More button: shown when additional pages of results exist */}
           {hasMore && (
             <div className="flex justify-center mt-12">
               <Button
@@ -303,6 +333,7 @@ function EventsContent() {
           )}
         </>
       ) : (
+        /* Empty state: no events match the current filters */
         <div className="text-center py-20">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-foreground/5 mb-6">
             <Calendar className="h-7 w-7 text-foreground-subtle" />
@@ -326,6 +357,7 @@ function EventsContent() {
   );
 }
 
+// Wrap in Suspense because EventsContent uses useSearchParams()
 export default function EventsPage() {
   return (
     <Suspense fallback={<PageSpinner />}>

@@ -1,3 +1,8 @@
+# Admin activity log routes -- provides read-only endpoints for viewing
+# the admin audit trail. Every admin action (create, update, delete, etc.)
+# is recorded as an activity log entry. These endpoints allow admins to
+# review the log with filtering and pagination.
+
 import datetime
 
 import fastapi
@@ -13,6 +18,10 @@ from src.repository.crud.account import AccountCRUDRepository
 router = fastapi.APIRouter(prefix="/logs", tags=["admin-logs"])
 
 
+# GET /admin/logs -- Paginated list of admin activity logs with optional
+# filters for admin_id, action type, entity_type, and date range. For
+# each log entry, the admin's username is resolved by looking up the
+# account record. If the account lookup fails, the username is left as None.
 @router.get(
     "",
     name="admin:list-activity-logs",
@@ -32,6 +41,7 @@ async def list_activity_logs(
     account_repo: AccountCRUDRepository = Depends(get_repository(repo_type=AccountCRUDRepository)),
 ) -> AdminActivityLogListResponse:
     """List admin activity logs with pagination and filtering (admin only)"""
+    # Fetch paginated logs with the given filters
     logs, total = await log_repo.get_logs(
         page=page,
         page_size=page_size,
@@ -42,7 +52,9 @@ async def list_activity_logs(
         end_date=end_date,
     )
 
-    # Fetch admin usernames
+    # Fetch admin usernames -- enrich each log with the admin's username
+    # by looking up their account. Errors are silently caught so a deleted
+    # or missing admin account does not break the log listing.
     log_views = []
     for log in logs:
         admin_username = None
@@ -76,6 +88,9 @@ async def list_activity_logs(
     )
 
 
+# GET /admin/logs/{log_id} -- Retrieve a single activity log entry by its
+# ID. Returns 404 if the log entry does not exist. Also resolves the
+# admin username for display.
 @router.get(
     "/{log_id}",
     name="admin:get-activity-log",
@@ -90,13 +105,14 @@ async def get_activity_log(
 ) -> AdminActivityLogView:
     """Get a specific activity log by ID (admin only)"""
     log = await log_repo.get_log_by_id(log_id=log_id)
+    # Return 404 if no log entry matches the given ID
     if not log:
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_404_NOT_FOUND,
             detail="Activity log not found",
         )
 
-    # Fetch admin username
+    # Fetch admin username -- resolve the admin_id to a username for display
     admin_username = None
     if log.admin_id:
         try:

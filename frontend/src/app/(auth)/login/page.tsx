@@ -1,3 +1,13 @@
+/*
+ * Login page: supports two authentication modes:
+ *   1. Email OTP (default) - sends a one-time code to the user's email
+ *   2. Password-based login - traditional username/email/password form
+ *
+ * After successful login, redirects to a "redirect" query param (if present),
+ * the admin dashboard (for admin users), or the home page.
+ * Wrapped in Suspense because it reads searchParams via useSearchParams().
+ */
+
 "use client";
 
 import { Suspense, useState } from "react";
@@ -10,18 +20,23 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useAuthStore } from "@/store/auth";
 import { emailOtpApi } from "@/lib/api";
 
+// Union type for the two login modes
 type LoginMode = "email-otp" | "password";
 
 function LoginContent() {
   const searchParams = useSearchParams();
+  // Optional redirect URL from the query string (e.g., after a protected route redirect)
   const redirectTo = searchParams.get("redirect");
+  // Auth store provides login functions, loading state, and error handling
   const { login, loginWithEmailOTP, isLoading, error, clearError } = useAuthStore();
 
+  // Determine where to redirect after login based on user role
   const getRedirectUrl = (role?: string) => {
     if (role === "admin") return "/admin";
     return redirectTo || "/";
   };
 
+  // Track which login mode is active (email OTP vs password)
   const [loginMode, setLoginMode] = useState<LoginMode>("email-otp");
 
   // Password login state
@@ -32,7 +47,7 @@ function LoginContent() {
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // Email OTP state
+  // Email OTP state: tracks email, OTP code, sent status, loading, error, and resend cooldown
   const [emailForOtp, setEmailForOtp] = useState("");
   const [emailOtpCode, setEmailOtpCode] = useState("");
   const [emailOtpSent, setEmailOtpSent] = useState(false);
@@ -40,6 +55,7 @@ function LoginContent() {
   const [emailOtpError, setEmailOtpError] = useState("");
   const [emailResendCountdown, setEmailResendCountdown] = useState(0);
 
+  // Start a 30-second countdown timer before the user can resend the OTP
   const startResendCountdown = () => {
     setEmailResendCountdown(30);
     const interval = setInterval(() => {
@@ -55,6 +71,7 @@ function LoginContent() {
 
   // ==================== Email OTP handlers ====================
 
+  // Validate email and send an OTP code to the user's email address
   const handleSendEmailOTP = async () => {
     if (!emailForOtp.trim()) {
       setEmailOtpError("Email is required");
@@ -78,6 +95,7 @@ function LoginContent() {
     }
   };
 
+  // Resend the OTP code to the same email address
   const handleResendEmailOTP = async () => {
     setEmailOtpLoading(true);
     setEmailOtpError("");
@@ -91,6 +109,7 @@ function LoginContent() {
     }
   };
 
+  // Submit the OTP code for verification and log the user in
   const handleEmailOTPSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
@@ -111,6 +130,7 @@ function LoginContent() {
 
   // ==================== Password login handlers ====================
 
+  // Client-side validation for the password login form fields
   const validatePasswordForm = () => {
     const errors: Record<string, string> = {};
     if (!formData.username.trim()) errors.username = "Username is required";
@@ -124,6 +144,7 @@ function LoginContent() {
     return Object.keys(errors).length === 0;
   };
 
+  // Submit the password-based login form
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
@@ -138,6 +159,7 @@ function LoginContent() {
     }
   };
 
+  // Generic input change handler that also clears per-field errors on edit
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -146,6 +168,7 @@ function LoginContent() {
     }
   };
 
+  // Switch between email-OTP and password login modes, clearing all errors
   const switchMode = (mode: LoginMode) => {
     clearError();
     setFormErrors({});
@@ -160,7 +183,7 @@ function LoginContent() {
         <CardDescription>Sign in to your ZONIQ account</CardDescription>
       </CardHeader>
       <CardContent>
-        {/* Login mode tabs */}
+        {/* Login mode tabs: toggle between Email OTP and Password authentication */}
         <div className="flex mb-6 p-1 bg-background-elevated rounded-xl">
           <button
             type="button"
@@ -186,6 +209,7 @@ function LoginContent() {
           </button>
         </div>
 
+        {/* Global error banner from the auth store */}
         {error && (
           <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-error/5 border border-error/10 text-error text-sm mb-5">
             <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -196,6 +220,7 @@ function LoginContent() {
         {/* Email OTP Login Form (Default) */}
         {loginMode === "email-otp" && (
           <form onSubmit={handleEmailOTPSubmit} className="space-y-4">
+            {/* Email input with "Get Code" / "Change" button */}
             <div className="space-y-2">
               <div className="flex gap-2">
                 <div className="flex-1">
@@ -253,6 +278,7 @@ function LoginContent() {
               </div>
             </div>
 
+            {/* OTP code entry: shown after OTP has been sent */}
             {emailOtpSent && (
               <div className="space-y-4 animate-fade-in">
                 <Input
@@ -269,10 +295,12 @@ function LoginContent() {
                   autoFocus
                 />
 
+                {/* Inline OTP-specific error message */}
                 {emailOtpError && (
                   <p className="text-xs text-error font-medium">{emailOtpError}</p>
                 )}
 
+                {/* Resend OTP link with countdown timer */}
                 <div className="flex items-center justify-between">
                   <button
                     type="button"
@@ -286,6 +314,7 @@ function LoginContent() {
                   </button>
                 </div>
 
+                {/* Submit OTP to log in */}
                 <Button
                   type="submit"
                   className="w-full"
@@ -298,6 +327,7 @@ function LoginContent() {
               </div>
             )}
 
+            {/* Informational text shown before OTP is sent */}
             {!emailOtpSent && (
               <p className="text-xs text-foreground-subtle text-center leading-relaxed">
                 We&apos;ll send a verification code to your email. No password needed — new users are automatically registered.
@@ -359,6 +389,7 @@ function LoginContent() {
           </form>
         )}
 
+        {/* Link to the signup page for users who want password-based accounts */}
         <div className="text-center text-sm text-foreground-muted mt-6 pt-6 border-t border-border/50">
           Want to create an account with a password?{" "}
           <Link href="/signup" className="text-primary hover:underline font-semibold">
@@ -370,6 +401,7 @@ function LoginContent() {
   );
 }
 
+// Wrap LoginContent in Suspense because useSearchParams() requires it in Next.js App Router
 export default function LoginPage() {
   return (
     <Suspense>

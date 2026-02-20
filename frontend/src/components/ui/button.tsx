@@ -1,3 +1,24 @@
+/**
+ * Button - A versatile, accessible button component with multiple visual variants and sizes.
+ *
+ * Built with class-variance-authority (cva) for variant-based styling
+ * and React.forwardRef for ref forwarding.
+ *
+ * Variants:
+ * - default: Primary filled button with glow shadow.
+ * - secondary: Elevated background with border.
+ * - outline: Transparent with border only.
+ * - ghost: No background, text-only with hover effect.
+ * - link: Styled as an underlined text link.
+ * - destructive: Red/error filled button.
+ * - success: Green filled button.
+ *
+ * Sizes: default, sm, lg, xl, icon.
+ *
+ * Extra props:
+ * - isLoading: shows a spinning Loader2 icon and disables the button.
+ * - leftIcon / rightIcon: optional icon elements placed before/after children.
+ */
 "use client";
 
 import * as React from "react";
@@ -5,6 +26,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
+// Define button variant and size styles using class-variance-authority
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold tracking-tight transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 cursor-pointer active:scale-[0.97]",
   {
@@ -47,6 +69,7 @@ export interface ButtonProps
   rightIcon?: React.ReactNode;
 }
 
+// Button component with forwardRef for composability with external libraries
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
     {
@@ -69,12 +92,14 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || isLoading}
         {...props}
       >
+        {/* Show spinner when loading, otherwise show the optional left icon */}
         {isLoading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
           leftIcon
         )}
         {children}
+        {/* Right icon is hidden during loading state */}
         {!isLoading && rightIcon}
       </button>
     );

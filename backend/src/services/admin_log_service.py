@@ -4,14 +4,17 @@ from src.models.db.admin_activity_log import AdminAction
 from src.repository.crud.admin_log import AdminLogCRUDRepository
 
 
+# Service class for recording admin activities in the audit log
 class AdminLogService:
     """
     Service for logging admin activities.
     """
 
+    # Initialize with an async database session and create the underlying CRUD repository
     def __init__(self, async_session: SQLAlchemyAsyncSession):
         self.repo = AdminLogCRUDRepository(async_session=async_session)
 
+    # Record a generic admin action with optional entity reference and metadata
     async def log_action(
         self,
         admin_id: int,
@@ -31,6 +34,7 @@ class AdminLogService:
             ip_address=ip_address,
         )
 
+    # Record that an admin blocked a specific user, including the optional reason
     async def log_user_blocked(
         self,
         admin_id: int,
@@ -48,6 +52,7 @@ class AdminLogService:
             ip_address=ip_address,
         )
 
+    # Record that an admin unblocked a previously blocked user
     async def log_user_unblocked(
         self,
         admin_id: int,
@@ -63,6 +68,7 @@ class AdminLogService:
             ip_address=ip_address,
         )
 
+    # Record that an admin promoted a regular user to admin role
     async def log_make_admin(
         self,
         admin_id: int,
@@ -78,6 +84,7 @@ class AdminLogService:
             ip_address=ip_address,
         )
 
+    # Record that an admin demoted another admin back to regular user role
     async def log_remove_admin(
         self,
         admin_id: int,

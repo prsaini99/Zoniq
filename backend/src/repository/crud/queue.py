@@ -1,3 +1,8 @@
+# Queue CRUD repository -- manages a virtual waiting queue for high-demand events.
+# Users join a FIFO queue, are moved to PROCESSING state in batches, and can then
+# proceed to booking. Handles position tracking, expiry of stale entries, and
+# concurrent-safe batch processing using FOR UPDATE SKIP LOCKED.
+
 import datetime
 import typing
 from uuid import UUID
@@ -13,6 +18,9 @@ from src.utilities.exceptions.database import EntityDoesNotExist
 class QueueCRUDRepository(BaseCRUDRepository):
     """CRUD operations for queue entries"""
 
+    # Determines the next available position in the queue for a given event.
+    # Finds the maximum position among active (WAITING or PROCESSING) entries and adds 1.
+    # Returns 1 if the queue is empty.
     async def get_next_position(self, event_id: int) -> int:
         """Get the next available position in queue for an event"""
         stmt = (
@@ -30,6 +38,8 @@ class QueueCRUDRepository(BaseCRUDRepository):
         result = await self.async_session.execute(statement=stmt)
         return result.scalar() or 1
 
+    # Adds a user to the event queue. If the user already has an active entry
+    # (WAITING or PROCESSING), returns the existing entry instead of creating a duplicate.
     async def join_queue(
         self,
         event_id: int,
@@ -46,6 +56,7 @@ class QueueCRUDRepository(BaseCRUDRepository):
         # Get next position
         position = await self.get_next_position(event_id=event_id)
 
+        # Create a new WAITING entry at the end of the queue.
         new_entry = QueueEntry(
             event_id=event_id,
             user_id=user_id,
@@ -61,6 +72,8 @@ class QueueCRUDRepository(BaseCRUDRepository):
 
         return new_entry
 
+    # Fetches a queue entry by its UUID primary key.
+    # Raises EntityDoesNotExist if the entry is not found.
     async def get_entry_by_id(self, entry_id: UUID) -> QueueEntry:
         """Get a queue entry by ID"""
         stmt = sqlalchemy.select(QueueEntry).where(QueueEntry.id == entry_id)
@@ -72,6 +85,8 @@ class QueueCRUDRepository(BaseCRUDRepository):
 
         return entry
 
+    # Looks up a user's active queue entry (WAITING or PROCESSING) for a specific event.
+    # Returns None if the user is not currently in the queue.
     async def get_active_entry(self, event_id: int, user_id: int) -> QueueEntry | None:
         """Get user's active queue entry for an event"""
         stmt = (
@@ -86,6 +101,8 @@ class QueueCRUDRepository(BaseCRUDRepository):
         result = await self.async_session.execute(statement=stmt)
         return result.scalar()
 
+    # Returns the user's queue entry and the number of people ahead of them.
+    # "Ahead" means active entries with a lower position number.
     async def get_user_position(self, event_id: int, user_id: int) -> tuple[QueueEntry | None, int]:
         """Get user's queue entry and count of people ahead"""
         entry = await self.get_active_entry(event_id=event_id, user_id=user_id)
@@ -109,6 +126,8 @@ class QueueCRUDRepository(BaseCRUDRepository):
 
         return entry, ahead_count
 
+    # Allows a user to voluntarily leave the queue by marking their entry as LEFT.
+    # Returns False if no active entry was found.
     async def leave_queue(self, event_id: int, user_id: int) -> bool:
         """Remove user from queue"""
         entry = await self.get_active_entry(event_id=event_id, user_id=user_id)
@@ -126,6 +145,8 @@ class QueueCRUDRepository(BaseCRUDRepository):
 
         return True
 
+    # Transitions a queue entry from WAITING to PROCESSING with a time-limited window.
+    # The user must complete their booking within processing_minutes or the entry expires.
     async def mark_as_processing(
         self,
         entry_id: UUID,
@@ -149,6 +170,8 @@ class QueueCRUDRepository(BaseCRUDRepository):
 
         return await self.get_entry_by_id(entry_id=entry_id)
 
+    # Marks a user's queue entry as COMPLETED after they successfully finish booking.
+    # Returns False if no active entry was found.
     async def mark_as_completed(self, event_id: int, user_id: int) -> bool:
         """Mark user's queue entry as completed"""
         entry = await self.get_active_entry(event_id=event_id, user_id=user_id)
@@ -170,6 +193,9 @@ class QueueCRUDRepository(BaseCRUDRepository):
 
         return True
 
+    # Expires entries that are in PROCESSING state but have exceeded their allotted time.
+    # Intended to be run periodically as a background task.
+    # Returns the number of entries that were expired.
     async def expire_stale_entries(self) -> int:
         """Expire entries that exceeded their processing time"""
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -184,6 +210,8 @@ class QueueCRUDRepository(BaseCRUDRepository):
 
         return result.rowcount or 0
 
+    # Returns queue statistics for an event: counts of WAITING and PROCESSING entries.
+    # Useful for admin dashboards and queue status displays.
     async def get_queue_stats(self, event_id: int) -> dict:
         """Get queue statistics for an event"""
         waiting_stmt = (
@@ -210,6 +238,9 @@ class QueueCRUDRepository(BaseCRUDRepository):
             "processing": processing_count,
         }
 
+    # Fetches the next batch of WAITING entries to promote to PROCESSING.
+    # Uses FOR UPDATE SKIP LOCKED for safe concurrent access -- multiple workers
+    # can call this simultaneously without processing the same entries.
     async def get_entries_to_process(
         self,
         event_id: int,
@@ -228,6 +259,8 @@ class QueueCRUDRepository(BaseCRUDRepository):
         result = await self.async_session.execute(statement=stmt)
         return result.scalars().all()
 
+    # Counts the number of users currently in PROCESSING state for an event.
+    # Used to determine how many more users can be promoted from the waiting queue.
     async def count_active_processing(self, event_id: int) -> int:
         """Count users currently in processing state"""
         stmt = (
@@ -239,6 +272,8 @@ class QueueCRUDRepository(BaseCRUDRepository):
         result = await self.async_session.execute(statement=stmt)
         return result.scalar() or 0
 
+    # Returns all active (WAITING and PROCESSING) queue entries for an event,
+    # ordered by position. Used for broadcasting real-time queue updates to clients.
     async def get_all_active_entries_for_event(
         self,
         event_id: int

@@ -1,3 +1,4 @@
+# OTP CRUD repository for creating, validating, and managing one-time password codes
 import datetime
 import typing
 
@@ -10,6 +11,8 @@ from src.utilities.exceptions.database import EntityDoesNotExist
 
 
 class OTPCRUDRepository(BaseCRUDRepository):
+    # Creates a new OTP record in the database with the given code, purpose, and expiration
+    # Can be linked to a user_id, phone number, or email address
     async def create_otp(
         self,
         code: str,
@@ -35,6 +38,9 @@ class OTPCRUDRepository(BaseCRUDRepository):
 
         return new_otp
 
+    # Retrieves a valid OTP that matches the code, purpose, and contact method (phone/email)
+    # Only returns OTPs that have not been used and have not expired
+    # Orders by newest first to get the most recent matching OTP
     async def get_valid_otp(
         self,
         code: str,
@@ -52,16 +58,19 @@ class OTPCRUDRepository(BaseCRUDRepository):
             OTPCode.expires_at > now,
         )
 
+        # Filter by the delivery method used
         if phone:
             stmt = stmt.where(OTPCode.phone == phone)
         if email:
             stmt = stmt.where(OTPCode.email == email)
 
+        # Get the most recently created matching OTP
         stmt = stmt.order_by(OTPCode.created_at.desc())
 
         query = await self.async_session.execute(statement=stmt)
         return query.scalar()
 
+    # Marks a specific OTP as used so it cannot be reused
     async def mark_otp_as_used(self, otp_id: int) -> None:
         """Mark an OTP code as used"""
         stmt = (
@@ -72,6 +81,8 @@ class OTPCRUDRepository(BaseCRUDRepository):
         await self.async_session.execute(statement=stmt)
         await self.async_session.commit()
 
+    # Invalidates all previous unused OTPs for the same purpose and contact method
+    # Called before creating a new OTP to ensure only the latest code is valid
     async def invalidate_previous_otps(
         self,
         purpose: str,
@@ -96,6 +107,8 @@ class OTPCRUDRepository(BaseCRUDRepository):
         await self.async_session.execute(statement=stmt)
         await self.async_session.commit()
 
+    # Deletes all expired OTP records from the database as a cleanup/maintenance task
+    # Returns the number of deleted rows
     async def cleanup_expired_otps(self) -> int:
         """Delete expired OTP codes (cleanup task)"""
         now = datetime.datetime.now(datetime.timezone.utc)

@@ -1,3 +1,8 @@
+# Admin booking management routes -- provides endpoints for viewing bookings,
+# booking statistics, sales analytics, top-performing events, and attendee
+# lists. Performs direct SQLAlchemy queries against Booking, BookingItem,
+# Event, and Payment models. All endpoints require admin authentication.
+
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
@@ -21,7 +26,11 @@ logger = logging.getLogger(__name__)
 router = fastapi.APIRouter(prefix="/bookings", tags=["admin-bookings"])
 
 
-# Response Schemas
+# ==================== Response Schemas ====================
+# These Pydantic models are defined inline rather than in the shared schemas
+# module because they are specific to the admin booking views.
+
+# Compact user info embedded in the booking response
 class BookingUserInfo(BaseModel):
     id: int
     username: str
@@ -32,6 +41,7 @@ class BookingUserInfo(BaseModel):
         from_attributes = True
 
 
+# Compact event info embedded in the booking response
 class BookingEventInfo(BaseModel):
     id: int
     title: str
@@ -41,6 +51,7 @@ class BookingEventInfo(BaseModel):
         from_attributes = True
 
 
+# Full admin booking response with user, event, payment, and promo details
 class AdminBookingResponse(BaseModel):
     id: int
     booking_number: str
@@ -61,6 +72,7 @@ class AdminBookingResponse(BaseModel):
         from_attributes = True
 
 
+# Paginated wrapper for booking list responses
 class BookingListResponse(BaseModel):
     bookings: list[AdminBookingResponse]
     total: int
@@ -68,6 +80,7 @@ class BookingListResponse(BaseModel):
     page_size: int
 
 
+# Aggregate booking statistics with status breakdown and revenue total
 class BookingStatsResponse(BaseModel):
     total_bookings: int
     confirmed_bookings: int
@@ -77,6 +90,7 @@ class BookingStatsResponse(BaseModel):
     total_tickets_sold: int
 
 
+# Sales analytics response with aggregate totals and a per-day breakdown
 class SalesAnalyticsResponse(BaseModel):
     period: str
     total_revenue: float
@@ -86,10 +100,13 @@ class SalesAnalyticsResponse(BaseModel):
     daily_breakdown: list[dict]
 
 
+# Wrapper for the top events ranked by revenue
 class TopEventsResponse(BaseModel):
     events: list[dict]
 
 
+# Helper to convert a Booking ORM model (with eager-loaded user and event
+# relationships) into the AdminBookingResponse schema.
 def _build_booking_response(booking: Booking) -> AdminBookingResponse:
     return AdminBookingResponse(
         id=booking.id,
@@ -118,6 +135,10 @@ def _build_booking_response(booking: Booking) -> AdminBookingResponse:
     )
 
 
+# GET /admin/bookings -- Paginated booking list with optional filters for
+# status, payment_status, event_id, user_id, booking number search, and
+# date range. Eager-loads user and event relationships. Results are ordered
+# by creation date descending (newest first).
 @router.get(
     "",
     name="admin:list-bookings",
@@ -138,11 +159,13 @@ async def list_bookings(
     repo: BaseCRUDRepository = Depends(get_repository(repo_type=BaseCRUDRepository)),
 ) -> BookingListResponse:
     """List all bookings with filtering."""
+    # Base query with eager-loaded relationships for user and event
     stmt = select(Booking).options(
         selectinload(Booking.user),
         selectinload(Booking.event),
     )
 
+    # Apply optional filters -- each narrows the result set
     if status:
         stmt = stmt.where(Booking.status == status)
     if payment_status:
@@ -158,7 +181,7 @@ async def list_bookings(
     if date_to:
         stmt = stmt.where(Booking.created_at <= date_to)
 
-    # Count total
+    # Count total matching records before pagination
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total_result = await repo.async_session.execute(count_stmt)
     total = total_result.scalar() or 0
@@ -178,6 +201,9 @@ async def list_bookings(
     )
 
 
+# GET /admin/bookings/stats -- Returns aggregate booking statistics.
+# Optionally filtered by event_id. Revenue and tickets sold are counted
+# only for confirmed bookings.
 @router.get(
     "/stats",
     name="admin:booking-stats",
@@ -190,6 +216,7 @@ async def get_booking_stats(
     repo: BaseCRUDRepository = Depends(get_repository(repo_type=BaseCRUDRepository)),
 ) -> BookingStatsResponse:
     """Get booking statistics."""
+    # Conditionally filter by event_id; True means no filter
     base_filter = Booking.event_id == event_id if event_id else True
 
     # Total bookings
@@ -198,7 +225,7 @@ async def get_booking_stats(
     )
     total_bookings = total_result.scalar() or 0
 
-    # Status counts
+    # Status counts -- group bookings by status to get confirmed/pending/cancelled counts
     status_result = await repo.async_session.execute(
         select(
             Booking.status,
@@ -217,7 +244,7 @@ async def get_booking_stats(
     )
     total_revenue = float(revenue_result.scalar() or 0)
 
-    # Total tickets sold
+    # Total tickets sold (confirmed bookings only)
     tickets_result = await repo.async_session.execute(
         select(func.sum(Booking.ticket_count)).where(
             and_(base_filter, Booking.status == "confirmed")
@@ -235,6 +262,10 @@ async def get_booking_stats(
     )
 
 
+# GET /admin/bookings/analytics -- Sales analytics over a configurable
+# time period (7d, 30d, 90d, 1y). Only confirmed bookings are counted.
+# Returns aggregate totals plus a day-by-day revenue/bookings/tickets
+# breakdown for charting.
 @router.get(
     "/analytics",
     name="admin:sales-analytics",
@@ -248,7 +279,7 @@ async def get_sales_analytics(
     repo: BaseCRUDRepository = Depends(get_repository(repo_type=BaseCRUDRepository)),
 ) -> SalesAnalyticsResponse:
     """Get sales analytics for a period."""
-    # Calculate date range
+    # Calculate date range based on the selected period
     now = datetime.utcnow()
     if period == "7d":
         start_date = now - timedelta(days=7)
@@ -259,6 +290,7 @@ async def get_sales_analytics(
     else:  # 1y
         start_date = now - timedelta(days=365)
 
+    # Build filter: confirmed bookings within the date range
     base_filter = and_(
         Booking.created_at >= start_date,
         Booking.status == "confirmed",
@@ -266,7 +298,7 @@ async def get_sales_analytics(
     if event_id:
         base_filter = and_(base_filter, Booking.event_id == event_id)
 
-    # Aggregate stats
+    # Aggregate stats: total revenue, booking count, ticket count
     stats_result = await repo.async_session.execute(
         select(
             func.sum(Booking.final_amount),
@@ -278,9 +310,10 @@ async def get_sales_analytics(
     total_revenue = float(stats[0] or 0)
     total_bookings = stats[1] or 0
     total_tickets = stats[2] or 0
+    # Compute average order value, guarding against division by zero
     avg_order_value = total_revenue / total_bookings if total_bookings > 0 else 0
 
-    # Daily breakdown
+    # Daily breakdown -- group by date for time-series chart data
     daily_result = await repo.async_session.execute(
         select(
             func.date(Booking.created_at).label("date"),
@@ -312,6 +345,9 @@ async def get_sales_analytics(
     )
 
 
+# GET /admin/bookings/top-events -- Rank events by total confirmed revenue
+# within a configurable time period. Joins Booking to Event and aggregates
+# revenue, booking count, and ticket count per event.
 @router.get(
     "/top-events",
     name="admin:top-events",
@@ -326,8 +362,10 @@ async def get_top_events(
 ) -> TopEventsResponse:
     """Get top performing events by revenue."""
     now = datetime.utcnow()
+    # Only include confirmed bookings in the ranking
     base_filter = Booking.status == "confirmed"
 
+    # Apply date range filter unless "all" is selected
     if period != "all":
         if period == "7d":
             start_date = now - timedelta(days=7)
@@ -339,6 +377,7 @@ async def get_top_events(
             start_date = now - timedelta(days=365)
         base_filter = and_(base_filter, Booking.created_at >= start_date)
 
+    # Aggregate revenue, bookings, and tickets per event, ordered by revenue desc
     result = await repo.async_session.execute(
         select(
             Event.id,
@@ -370,6 +409,9 @@ async def get_top_events(
     return TopEventsResponse(events=events)
 
 
+# GET /admin/bookings/{booking_id} -- Retrieve a single booking by its
+# numeric ID. Eager-loads user and event relationships. Returns 404
+# if the booking does not exist.
 @router.get(
     "/{booking_id}",
     name="admin:get-booking",
@@ -398,6 +440,11 @@ async def get_booking(
     return _build_booking_response(booking)
 
 
+# GET /admin/bookings/event/{event_id}/attendees -- Retrieve a paginated
+# attendee list for a specific event. Pulls data from BookingItem (individual
+# tickets) joined with Booking (for user info). Only includes tickets from
+# confirmed bookings. Supports search by ticket number. Also returns a
+# checked_in count (tickets where is_used=True).
 @router.get(
     "/event/{event_id}/attendees",
     name="admin:event-attendees",
@@ -412,6 +459,7 @@ async def get_event_attendees(
     repo: BaseCRUDRepository = Depends(get_repository(repo_type=BaseCRUDRepository)),
 ) -> dict:
     """Get attendee list for an event."""
+    # Query individual booking items (tickets) for confirmed bookings of this event
     stmt = (
         select(BookingItem)
         .join(Booking, BookingItem.booking_id == Booking.id)
@@ -426,23 +474,25 @@ async def get_event_attendees(
         )
     )
 
+    # Optionally filter by ticket number search
     if search:
         stmt = stmt.where(
             BookingItem.ticket_number.ilike(f"%{search}%")
         )
 
-    # Count total
+    # Count total matching tickets before pagination
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total_result = await repo.async_session.execute(count_stmt)
     total = total_result.scalar() or 0
 
-    # Apply pagination
+    # Apply pagination ordered by ticket number
     stmt = stmt.order_by(BookingItem.ticket_number)
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
 
     result = await repo.async_session.execute(stmt)
     items = result.scalars().all()
 
+    # Build attendee list with ticket details, user info, and check-in status
     attendees = [
         {
             "ticket_id": item.id,
@@ -467,5 +517,6 @@ async def get_event_attendees(
         "total": total,
         "page": page,
         "page_size": page_size,
+        # Count how many attendees on this page have already checked in
         "checked_in": sum(1 for a in attendees if a["is_used"]),
     }

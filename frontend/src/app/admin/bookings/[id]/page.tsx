@@ -1,3 +1,14 @@
+/**
+ * BookingDetailPage - Shows the full details of a single booking for admin review.
+ *
+ * This is a dynamic route (/admin/bookings/[id]) that fetches:
+ * - Booking details (customer info, event info, amounts, status).
+ * - Associated ticket items (ticket number, category, seat, usage status).
+ *
+ * Layout:
+ * - Left column (2/3): Event details card, Customer details card, Tickets table.
+ * - Right column (1/3): Payment summary (subtotal, discount, total) and quick IDs.
+ */
 "use client";
 
 import { useState, useEffect } from "react";
@@ -18,6 +29,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle } from "@/components/u
 import { formatDate, formatPrice } from "@/lib/utils";
 import api from "@/lib/api";
 
+// Full booking detail shape returned by the API
 interface BookingDetail {
   id: number;
   booking_number: string;
@@ -44,6 +56,7 @@ interface BookingDetail {
   created_at: string;
 }
 
+// Individual ticket entry within a booking
 interface TicketItem {
   id: number;
   ticket_number: string;
@@ -54,12 +67,14 @@ interface TicketItem {
   used_at: string | null;
 }
 
+// Booking status to color mapping
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   pending: { bg: "bg-warning/20", text: "text-warning" },
   confirmed: { bg: "bg-success/20", text: "text-success" },
   cancelled: { bg: "bg-error/20", text: "text-error" },
 };
 
+// Payment status to color mapping
 const PAYMENT_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   pending: { bg: "bg-warning/20", text: "text-warning" },
   success: { bg: "bg-success/20", text: "text-success" },
@@ -67,21 +82,25 @@ const PAYMENT_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 export default function BookingDetailPage() {
+  // Extract booking ID from the dynamic route params
   const params = useParams();
   const router = useRouter();
   const bookingId = params.id as string;
 
+  // Page state
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch booking details and ticket items in parallel on mount / when bookingId changes
   useEffect(() => {
     const fetchBookingDetails = async () => {
       try {
         setIsLoading(true);
         const [bookingRes, ticketsRes] = await Promise.all([
           api.get(`/admin/bookings/${bookingId}`),
+          // Gracefully handle missing tickets endpoint
           api.get(`/tickets/booking/${bookingId}`).catch(() => ({ data: [] })),
         ]);
 
@@ -99,6 +118,7 @@ export default function BookingDetailPage() {
     fetchBookingDetails();
   }, [bookingId]);
 
+  // Loading spinner
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -107,6 +127,7 @@ export default function BookingDetailPage() {
     );
   }
 
+  // Error / not-found state
   if (error || !booking) {
     return (
       <div className="text-center py-12">
@@ -126,7 +147,7 @@ export default function BookingDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header: back button, booking number, creation date, and status badges */}
       <div className="flex items-center gap-4">
         <Button
           variant="ghost"
@@ -144,6 +165,7 @@ export default function BookingDetailPage() {
             Created on {formatDate(booking.created_at)}
           </p>
         </div>
+        {/* Booking and payment status badges */}
         <div className="flex items-center gap-2">
           <span
             className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
@@ -163,9 +185,9 @@ export default function BookingDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Main Details */}
+        {/* Left Column - Main Details (spans 2 of 3 columns on large screens) */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Event Info */}
+          {/* Event Info Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -194,7 +216,7 @@ export default function BookingDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Customer Info */}
+          {/* Customer Info Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -225,6 +247,7 @@ export default function BookingDetailPage() {
                     </p>
                   </div>
                 </div>
+                {/* Conditionally show phone if provided */}
                 {booking.contact_phone && (
                   <div className="flex items-center gap-2">
                     <Phone className="h-4 w-4 text-foreground-muted" />
@@ -240,7 +263,7 @@ export default function BookingDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Tickets */}
+          {/* Tickets Table - lists individual tickets with usage status */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -289,6 +312,7 @@ export default function BookingDetailPage() {
                           <td className="p-3 text-foreground">
                             {formatPrice(ticket.price)}
                           </td>
+                          {/* Used / Not Used badge */}
                           <td className="p-3">
                             {ticket.is_used ? (
                               <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-success/20 text-success">
@@ -314,8 +338,9 @@ export default function BookingDetailPage() {
           </Card>
         </div>
 
-        {/* Right Column - Payment Summary */}
+        {/* Right Column - Payment Summary & Quick Reference IDs */}
         <div className="space-y-6">
+          {/* Payment Summary Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -330,6 +355,7 @@ export default function BookingDetailPage() {
                   {formatPrice(booking.total_amount)}
                 </span>
               </div>
+              {/* Show discount line only when a discount was applied */}
               {booking.discount_amount > 0 && (
                 <div className="flex justify-between">
                   <span className="text-foreground-muted">
@@ -343,6 +369,7 @@ export default function BookingDetailPage() {
                   </span>
                 </div>
               )}
+              {/* Final total */}
               <div className="border-t border-border pt-4 flex justify-between">
                 <span className="font-medium text-foreground">Total</span>
                 <span className="font-bold text-lg text-foreground">
@@ -352,7 +379,7 @@ export default function BookingDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Quick Info */}
+          {/* Quick Info card showing raw IDs for debugging / cross-referencing */}
           <Card>
             <CardContent className="p-4 space-y-3">
               <div className="flex justify-between text-sm">

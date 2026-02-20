@@ -1,9 +1,20 @@
+/**
+ * Footer - Site-wide footer component rendered at the bottom of every public page.
+ *
+ * Sections:
+ * - Brand column: logo, tagline/description, and contact info (email, phone, location).
+ * - Link columns: Company, Support, and Legal links.
+ * - Bottom bar: copyright notice and social media links (open in new tab).
+ *
+ * All link data is defined as static constants at the top of the file.
+ */
 "use client";
 
 import Link from "next/link";
 import Image from "next/image";
 import { Mail, Phone, MapPin, ArrowUpRight } from "lucide-react";
 
+// Footer navigation link groups
 const footerLinks = {
   company: [
     { label: "About Us", href: "/about" },
@@ -24,6 +35,7 @@ const footerLinks = {
   ],
 };
 
+// External social media links
 const socialLinks = [
   { label: "Twitter", href: "https://twitter.com/zoniq" },
   { label: "Instagram", href: "https://instagram.com/zoniq" },
@@ -33,12 +45,12 @@ const socialLinks = [
 export function Footer() {
   return (
     <footer className="relative border-t border-border/50 bg-background-soft">
-      {/* Ambient glow at top */}
+      {/* Decorative ambient glow line at the very top of the footer */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
 
       <div className="container mx-auto px-4 py-16">
         <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-12">
-          {/* Brand — takes 5 cols */}
+          {/* Brand Column (spans 5 of 12 columns on large screens) */}
           <div className="lg:col-span-5">
             <Link href="/" className="inline-flex items-center mb-6 group">
               <Image src="/zoniq-logo.png" alt="ZONIQ" width={120} height={40} className="h-8 w-auto transition-transform duration-300 group-hover:scale-105" />
@@ -47,6 +59,7 @@ export function Footer() {
               Fair access to the events you love. No bots, no scalpers — just a
               transparent ticketing platform built for real fans.
             </p>
+            {/* Contact details with icons */}
             <div className="space-y-3">
               {[
                 { icon: Mail, text: "support@zoniq.in" },
@@ -61,7 +74,7 @@ export function Footer() {
             </div>
           </div>
 
-          {/* Links columns — each 2 cols, spaced with gap */}
+          {/* Link Columns (each spans 2 of 12 columns on large screens) */}
           {[
             { title: "Company", links: footerLinks.company },
             { title: "Support", links: footerLinks.support },
@@ -87,13 +100,13 @@ export function Footer() {
           ))}
         </div>
 
-        {/* Bottom bar */}
+        {/* Bottom Bar: copyright and social links */}
         <div className="mt-16 pt-8 border-t border-border/50 flex flex-col md:flex-row items-center justify-between gap-6">
           <p className="text-xs text-foreground-subtle">
             &copy; {new Date().getFullYear()} ZONIQ. All rights reserved.
           </p>
 
-          {/* Social Links */}
+          {/* Social Links - each opens in a new tab */}
           <div className="flex items-center gap-5">
             {socialLinks.map((social) => (
               <a
@@ -105,6 +118,7 @@ export function Footer() {
                 aria-label={social.label}
               >
                 {social.label}
+                {/* External link arrow icon - appears on hover */}
                 <ArrowUpRight className="h-3 w-3 opacity-0 -translate-y-0.5 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200" />
               </a>
             ))}

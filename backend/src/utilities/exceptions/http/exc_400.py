@@ -14,6 +14,7 @@ from src.utilities.messages.exceptions.http.exc_details import (
 )
 
 
+# Raise a 400 error when signup credentials are invalid or incomplete
 async def http_exc_400_credentials_bad_signup_request() -> Exception:
     return fastapi.HTTPException(
         status_code=fastapi.status.HTTP_400_BAD_REQUEST,
@@ -21,6 +22,7 @@ async def http_exc_400_credentials_bad_signup_request() -> Exception:
     )
 
 
+# Raise a 400 error when signin credentials are invalid or incorrect
 async def http_exc_400_credentials_bad_signin_request() -> Exception:
     return fastapi.HTTPException(
         status_code=fastapi.status.HTTP_400_BAD_REQUEST,
@@ -28,6 +30,7 @@ async def http_exc_400_credentials_bad_signin_request() -> Exception:
     )
 
 
+# Raise a 400 error when the requested username is already taken
 async def http_400_exc_bad_username_request(username: str) -> Exception:
     return fastapi.HTTPException(
         status_code=fastapi.status.HTTP_400_BAD_REQUEST,
@@ -35,6 +38,7 @@ async def http_400_exc_bad_username_request(username: str) -> Exception:
     )
 
 
+# Raise a 400 error when the requested email is already registered
 async def http_400_exc_bad_email_request(email: str) -> Exception:
     return fastapi.HTTPException(
         status_code=fastapi.status.HTTP_400_BAD_REQUEST,

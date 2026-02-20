@@ -1,3 +1,14 @@
+/*
+ * Order Confirmation page: displayed after a successful payment.
+ * Shows a success animation, booking number (with copy-to-clipboard),
+ * event details, ticket list with individual prices, price summary
+ * (subtotal, discount, total), and navigation links to "My Tickets"
+ * and "Browse Events".
+ *
+ * Fetches booking details by ID from the bookings API on mount.
+ * Requires authentication; redirects to /login if not authenticated.
+ */
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -27,10 +38,13 @@ export default function OrderConfirmationPage() {
     const [booking, setBooking] = useState<BookingDetail | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState("");
+    // Tracks whether the booking number was just copied to clipboard
     const [copied, setCopied] = useState(false);
 
+    // Extract the booking ID from the dynamic route segment
     const bookingId = Number(params.id);
 
+    // Redirect if not authenticated, otherwise fetch booking details
     useEffect(() => {
         if (!isAuthenticated) {
             router.push("/login?redirect=/");
@@ -51,6 +65,7 @@ export default function OrderConfirmationPage() {
         if (bookingId) fetchBooking();
     }, [bookingId, isAuthenticated, router]);
 
+    // Copy the booking number to clipboard and show brief confirmation
     const copyBookingNumber = () => {
         if (booking?.bookingNumber) {
             navigator.clipboard.writeText(booking.bookingNumber);
@@ -59,6 +74,7 @@ export default function OrderConfirmationPage() {
         }
     };
 
+    // Loading spinner
     if (isLoading) {
         return (
             <div className="container mx-auto px-4 py-20 flex items-center justify-center">
@@ -67,6 +83,7 @@ export default function OrderConfirmationPage() {
         );
     }
 
+    // Error / not found state
     if (error || !booking) {
         return (
             <div className="container mx-auto px-4 py-20 text-center">
@@ -81,7 +98,7 @@ export default function OrderConfirmationPage() {
 
     return (
         <div className="container mx-auto px-4 py-8">
-            {/* Success Animation */}
+            {/* Success header with checkmark icon and confirmation message */}
             <div className="mb-8 text-center">
                 <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-green-500/10">
                     <CheckCircle2 className="h-10 w-10 text-green-500" />
@@ -96,7 +113,7 @@ export default function OrderConfirmationPage() {
             </div>
 
             <div className="mx-auto max-w-3xl space-y-6">
-                {/* Booking Number Card */}
+                {/* Booking Number Card: prominent display with copy button */}
                 <div className="rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 p-6">
                     <div className="flex items-center justify-between">
                         <div>
@@ -124,7 +141,7 @@ export default function OrderConfirmationPage() {
                     </div>
                 </div>
 
-                {/* Event Details */}
+                {/* Event Details: banner image, title, date/time, and venue */}
                 <div className="rounded-2xl border border-border bg-background-soft p-6">
                     <h2 className="text-lg font-bold text-foreground mb-4">Event Details</h2>
                     <div className="flex gap-4">
@@ -161,7 +178,7 @@ export default function OrderConfirmationPage() {
                     </div>
                 </div>
 
-                {/* Ticket List */}
+                {/* Ticket List: numbered list of each booked ticket with category, seat, and price */}
                 <div className="rounded-2xl border border-border bg-background-soft p-6">
                     <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                         <Ticket className="h-5 w-5 text-primary" />
@@ -174,6 +191,7 @@ export default function OrderConfirmationPage() {
                                 className="flex items-center justify-between rounded-xl bg-background p-4"
                             >
                                 <div className="flex items-center gap-3">
+                                    {/* Ticket index number */}
                                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">
                                         {idx + 1}
                                     </span>
@@ -192,7 +210,7 @@ export default function OrderConfirmationPage() {
                         ))}
                     </div>
 
-                    {/* Price Summary */}
+                    {/* Price Summary: subtotal, discount (if any), and total paid */}
                     <div className="mt-4 space-y-2 border-t border-border pt-4">
                         <div className="flex justify-between text-sm">
                             <span className="text-foreground-muted">Subtotal</span>
@@ -213,7 +231,7 @@ export default function OrderConfirmationPage() {
                     </div>
                 </div>
 
-                {/* Actions */}
+                {/* Navigation actions: "View My Tickets" and "Browse More Events" */}
                 <div className="flex flex-col sm:flex-row gap-3">
                     <Link
                         href="/my-tickets"
@@ -230,7 +248,7 @@ export default function OrderConfirmationPage() {
                     </Link>
                 </div>
 
-                {/* Info Note */}
+                {/* Info Note about e-ticket delivery */}
                 <div className="rounded-xl bg-blue-500/5 border border-blue-500/10 p-4 text-sm text-foreground-muted">
                     <p>
                         <strong className="text-foreground">📩 E-ticket sent!</strong>{" "}

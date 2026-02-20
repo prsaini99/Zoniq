@@ -1,3 +1,14 @@
+/**
+ * AdminDashboardPage - The main admin dashboard landing page.
+ *
+ * Displays a high-level overview of platform metrics including:
+ * - Revenue, bookings, users, and active events (stat cards).
+ * - Secondary stats: total tickets sold, weekly revenue, and total events.
+ * - A list of recent bookings with status badges.
+ * - A list of upcoming events with a ticket-sold progress bar.
+ *
+ * Data is fetched in parallel from three API endpoints on mount.
+ */
 "use client";
 
 import { useState, useEffect } from "react";
@@ -16,6 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { formatPrice } from "@/lib/utils";
 import api from "@/lib/api";
 
+// TypeScript interface for the dashboard overview metrics returned by the API
 interface DashboardOverview {
   total_users: number;
   new_users_today: number;
@@ -34,6 +46,7 @@ interface DashboardOverview {
   tickets_sold_week: number;
 }
 
+// TypeScript interface for a single recent booking row
 interface RecentBooking {
   id: number;
   booking_number: string;
@@ -47,6 +60,7 @@ interface RecentBooking {
   created_at: string;
 }
 
+// TypeScript interface for an upcoming event row
 interface UpcomingEvent {
   id: number;
   title: string;
@@ -58,6 +72,11 @@ interface UpcomingEvent {
   tickets_sold: number;
 }
 
+/**
+ * StatCard - Reusable card component that displays a single KPI metric.
+ * Shows a title, main value, optional sub-value, an icon, and an optional
+ * trend indicator (up/down arrow with a comparison label).
+ */
 function StatCard({
   title,
   value,
@@ -89,10 +108,12 @@ function StatCard({
               </p>
             )}
           </div>
+          {/* Icon container with primary tint background */}
           <div className="p-3 rounded-lg bg-primary/10">
             <Icon className="h-6 w-6 text-primary" />
           </div>
         </div>
+        {/* Optional trend indicator comparing to the previous week */}
         {trend && trendValue && (
           <div className="mt-4 flex items-center gap-1">
             {trend === "up" ? (
@@ -116,12 +137,14 @@ function StatCard({
 }
 
 export default function AdminDashboardPage() {
+  // State for the overview metrics, recent bookings, upcoming events, loading, and errors
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch all dashboard data in parallel on component mount
   useEffect(() => {
     const fetchDashboardData = async () => {
       setIsLoading(true);
@@ -146,6 +169,7 @@ export default function AdminDashboardPage() {
     fetchDashboardData();
   }, []);
 
+  // Loading state: centered spinner
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -154,6 +178,7 @@ export default function AdminDashboardPage() {
     );
   }
 
+  // Error state: display error message
   if (error || !overview) {
     return (
       <div className="text-center py-12">
@@ -164,7 +189,7 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Page Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-foreground-muted">
@@ -172,7 +197,7 @@ export default function AdminDashboardPage() {
         </p>
       </div>
 
-      {/* Stats Grid */}
+      {/* Primary Stats Grid - 4 key metrics in a responsive grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Revenue"
@@ -204,7 +229,7 @@ export default function AdminDashboardPage() {
         />
       </div>
 
-      {/* Secondary Stats */}
+      {/* Secondary Stats - tickets sold, weekly revenue, total events */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardContent className="p-6">
@@ -250,9 +275,9 @@ export default function AdminDashboardPage() {
         </Card>
       </div>
 
-      {/* Recent Bookings & Upcoming Events */}
+      {/* Recent Bookings & Upcoming Events side-by-side */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Recent Bookings */}
+        {/* Recent Bookings list with status badges (confirmed/pending/other) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Recent Bookings</CardTitle>
@@ -287,6 +312,7 @@ export default function AdminDashboardPage() {
                       <p className="font-medium text-foreground">
                         {formatPrice(booking.amount)}
                       </p>
+                      {/* Color-coded status badge */}
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full ${
                           booking.status === "confirmed"
@@ -306,7 +332,7 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Upcoming Events */}
+        {/* Upcoming Events list with a visual progress bar for ticket sales */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Upcoming Events</CardTitle>
@@ -341,6 +367,7 @@ export default function AdminDashboardPage() {
                       <p className="text-sm text-foreground">
                         {event.tickets_sold} / {event.total_seats} sold
                       </p>
+                      {/* Ticket sales progress bar */}
                       <div className="w-24 h-2 bg-background-elevated rounded-full mt-1">
                         <div
                           className="h-full bg-primary rounded-full"

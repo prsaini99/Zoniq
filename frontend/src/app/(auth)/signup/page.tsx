@@ -1,3 +1,14 @@
+/*
+ * Signup page: allows new users to register with username, email (verified via OTP),
+ * optional phone number, and a password that must meet strength requirements.
+ *
+ * Flow:
+ *   1. User fills in username and email, then clicks "Get Code" to receive an OTP.
+ *   2. User enters the OTP to verify email ownership.
+ *   3. User fills in password (with real-time strength indicator) and submits.
+ *   4. On success, the user is redirected to home or admin dashboard based on role.
+ */
+
 "use client";
 
 import { useState } from "react";
@@ -9,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useAuthStore } from "@/store/auth";
 import { emailOtpApi } from "@/lib/api";
 
+// Password validation rules displayed as a checklist during password entry
 const passwordRequirements = [
   { regex: /.{8,}/, label: "At least 8 characters" },
   { regex: /[A-Z]/, label: "One uppercase letter" },
@@ -18,8 +30,10 @@ const passwordRequirements = [
 ];
 
 export default function SignupPage() {
+  // Auth store provides the register function, loading/error state, and error clearing
   const { register, isLoading, error, clearError } = useAuthStore();
 
+  // Form field values for the signup form
   const [formData, setFormData] = useState({
     username: "",
     email: "",
@@ -27,17 +41,21 @@ export default function SignupPage() {
     password: "",
     confirmPassword: "",
   });
+  // Per-field validation errors
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  // Controls visibility of password requirement hints below the password input
   const [showPasswordHints, setShowPasswordHints] = useState(false);
 
-  // Email OTP state
+  // Email OTP verification state
   const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [emailOtpCode, setEmailOtpCode] = useState("");
   const [emailVerified, setEmailVerified] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState("");
+  // Cooldown timer (in seconds) before user can request another OTP
   const [resendCountdown, setResendCountdown] = useState(0);
 
+  // Start a 30-second cooldown for the OTP resend button
   const startResendCountdown = () => {
     setResendCountdown(30);
     const interval = setInterval(() => {
@@ -51,6 +69,7 @@ export default function SignupPage() {
     }, 1000);
   };
 
+  // Send an OTP to the user's email for verification
   const handleSendOTP = async () => {
     if (!formData.email.trim()) {
       setFormErrors((prev) => ({ ...prev, email: "Email is required" }));
@@ -74,6 +93,7 @@ export default function SignupPage() {
     }
   };
 
+  // Resend the OTP to the same email and restart the countdown
   const handleResendOTP = async () => {
     setOtpLoading(true);
     setOtpError("");
@@ -87,6 +107,7 @@ export default function SignupPage() {
     }
   };
 
+  // Validate all form fields before submission
   const validateForm = () => {
     const errors: Record<string, string> = {};
 
@@ -111,6 +132,7 @@ export default function SignupPage() {
     if (!formData.password) {
       errors.password = "Password is required";
     } else {
+      // Check password against all strength requirements
       const failedRequirements = passwordRequirements.filter(
         (req) => !req.regex.test(formData.password)
       );
@@ -127,6 +149,7 @@ export default function SignupPage() {
     return Object.keys(errors).length === 0;
   };
 
+  // Handle form submission: validate, register via the API, and redirect on success
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
@@ -148,6 +171,7 @@ export default function SignupPage() {
     }
   };
 
+  // Generic change handler that clears field-specific errors and resets OTP state if email changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -162,6 +186,7 @@ export default function SignupPage() {
     }
   };
 
+  // Calculate password strength based on how many requirements are met
   const getPasswordStrength = () => {
     const passed = passwordRequirements.filter((req) =>
       req.regex.test(formData.password)
@@ -182,6 +207,7 @@ export default function SignupPage() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Global error banner from the auth store */}
           {error && (
             <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-error/5 border border-error/10 text-error text-sm">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
@@ -189,6 +215,7 @@ export default function SignupPage() {
             </div>
           )}
 
+          {/* Username input */}
           <Input
             label="Username"
             name="username"
@@ -200,7 +227,7 @@ export default function SignupPage() {
             autoComplete="username"
           />
 
-          {/* Email with OTP Verification */}
+          {/* Email with OTP Verification: email input + "Get Code"/"Change" button + OTP entry */}
           <div className="space-y-2">
             <div className="flex gap-2">
               <div className="flex-1">
@@ -252,6 +279,7 @@ export default function SignupPage() {
               </div>
             </div>
 
+            {/* OTP code entry: visible after the code has been sent */}
             {emailOtpSent && (
               <div className="space-y-2">
                 <Input
@@ -276,6 +304,7 @@ export default function SignupPage() {
                   <p className="text-xs text-error">{otpError}</p>
                 )}
 
+                {/* Resend OTP link with cooldown countdown */}
                 <div className="flex items-center justify-between">
                   <button
                     type="button"
@@ -292,6 +321,7 @@ export default function SignupPage() {
             )}
           </div>
 
+          {/* Optional phone number input */}
           <Input
             label="Phone (optional)"
             name="phone"
@@ -304,6 +334,7 @@ export default function SignupPage() {
             autoComplete="tel"
           />
 
+          {/* Password input with real-time strength indicator and requirement checklist */}
           <div className="space-y-2">
             <Input
               label="Password"
@@ -318,7 +349,7 @@ export default function SignupPage() {
               autoComplete="new-password"
             />
 
-            {/* Password Strength Indicator */}
+            {/* Password Strength Indicator: progress bar + requirement checklist */}
             {formData.password && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -342,6 +373,7 @@ export default function SignupPage() {
                   )}
                 </div>
 
+                {/* Individual password requirement checklist items */}
                 {showPasswordHints && (
                   <ul className="space-y-1 text-xs">
                     {passwordRequirements.map((req, index) => {
@@ -367,6 +399,7 @@ export default function SignupPage() {
             )}
           </div>
 
+          {/* Confirm password input */}
           <Input
             label="Confirm Password"
             name="confirmPassword"
@@ -379,6 +412,7 @@ export default function SignupPage() {
             autoComplete="new-password"
           />
 
+          {/* Terms of Service and Privacy Policy agreement text */}
           <div className="text-xs text-foreground-muted">
             By creating an account, you agree to our{" "}
             <Link href="/terms" className="text-primary hover:underline">
@@ -391,6 +425,7 @@ export default function SignupPage() {
             .
           </div>
 
+          {/* Submit button: disabled until OTP is sent and entered */}
           <Button
             type="submit"
             className="w-full"
@@ -401,6 +436,7 @@ export default function SignupPage() {
             Create Account
           </Button>
 
+          {/* Link to the login page for existing users */}
           <div className="text-center text-sm text-foreground-muted pt-2 border-t border-border/50">
             Already have an account?{" "}
             <Link href="/login" className="text-primary hover:underline font-semibold">

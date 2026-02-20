@@ -11,6 +11,7 @@ from src.utilities.messages.exceptions.http.exc_details import (
 )
 
 
+# Raise a 404 error when no account is found matching the given email address
 async def http_404_exc_email_not_found_request(email: str) -> Exception:
     return fastapi.HTTPException(
         status_code=fastapi.status.HTTP_404_NOT_FOUND,
@@ -18,6 +19,7 @@ async def http_404_exc_email_not_found_request(email: str) -> Exception:
     )
 
 
+# Raise a 404 error when no account is found matching the given numeric ID
 async def http_404_exc_id_not_found_request(id: int) -> Exception:
     return fastapi.HTTPException(
         status_code=fastapi.status.HTTP_404_NOT_FOUND,
@@ -25,6 +27,7 @@ async def http_404_exc_id_not_found_request(id: int) -> Exception:
     )
 
 
+# Raise a 404 error when no account is found matching the given username
 async def http_404_exc_username_not_found_request(username: str) -> Exception:
     return fastapi.HTTPException(
         status_code=fastapi.status.HTTP_404_NOT_FOUND,

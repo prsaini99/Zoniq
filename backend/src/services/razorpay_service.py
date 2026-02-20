@@ -7,20 +7,25 @@ import razorpay
 
 from src.config.manager import settings
 
+# Configure module-level logger for payment operations
 logger = logging.getLogger(__name__)
 
 
+# Service class for integrating with the Razorpay payment gateway
 class RazorpayService:
     """
     Service for Razorpay payment gateway integration.
     """
 
+    # Load Razorpay API credentials and webhook secret from application settings
     def __init__(self):
         self.key_id = settings.RAZORPAY_KEY_ID
         self.key_secret = settings.RAZORPAY_KEY_SECRET
         self.webhook_secret = settings.RAZORPAY_WEBHOOK_SECRET
+        # Internal client instance — lazily initialized on first access
         self._client = None
 
+    # Lazily initialize and return the Razorpay SDK client, validating credentials first
     @property
     def client(self) -> razorpay.Client:
         """Lazy initialization of Razorpay client."""
@@ -30,6 +35,7 @@ class RazorpayService:
             self._client = razorpay.Client(auth=(self.key_id, self.key_secret))
         return self._client
 
+    # Create a new payment order on Razorpay with the specified amount, currency, and metadata
     def create_order(
         self,
         amount_paise: int,
@@ -49,17 +55,21 @@ class RazorpayService:
         Returns:
             Razorpay order response with order_id
         """
+        # Build the order payload with auto-capture enabled
         order_data = {
             "amount": amount_paise,
             "currency": currency,
             "payment_capture": 1,  # Auto-capture payment
         }
+        # Include optional receipt reference if provided
         if receipt:
             order_data["receipt"] = receipt
+        # Include optional notes/metadata if provided
         if notes:
             order_data["notes"] = notes
 
         try:
+            # Call Razorpay API to create the order
             order = self.client.order.create(data=order_data)
             logger.info(f"Created Razorpay order: {order['id']} for amount {amount_paise}")
             return order
@@ -67,6 +77,7 @@ class RazorpayService:
             logger.error(f"Failed to create Razorpay order: {str(e)}")
             raise
 
+    # Verify the cryptographic signature returned by Razorpay after a payment is completed
     def verify_payment_signature(
         self,
         razorpay_order_id: str,
@@ -85,6 +96,7 @@ class RazorpayService:
             True if signature is valid, False otherwise
         """
         try:
+            # Use Razorpay SDK utility to verify the payment signature
             self.client.utility.verify_payment_signature({
                 "razorpay_order_id": razorpay_order_id,
                 "razorpay_payment_id": razorpay_payment_id,
@@ -93,12 +105,14 @@ class RazorpayService:
             logger.info(f"Payment signature verified for order: {razorpay_order_id}")
             return True
         except razorpay.errors.SignatureVerificationError:
+            # Signature mismatch — possible tampering or incorrect data
             logger.warning(f"Invalid payment signature for order: {razorpay_order_id}")
             return False
         except Exception as e:
             logger.error(f"Error verifying payment signature: {str(e)}")
             return False
 
+    # Retrieve full payment details from Razorpay by payment ID
     def fetch_payment(self, payment_id: str) -> dict[str, Any]:
         """
         Fetch payment details from Razorpay.
@@ -116,6 +130,7 @@ class RazorpayService:
             logger.error(f"Failed to fetch payment {payment_id}: {str(e)}")
             raise
 
+    # Retrieve full order details from Razorpay by order ID
     def fetch_order(self, order_id: str) -> dict[str, Any]:
         """
         Fetch order details from Razorpay.
@@ -133,6 +148,7 @@ class RazorpayService:
             logger.error(f"Failed to fetch order {order_id}: {str(e)}")
             raise
 
+    # Issue a full or partial refund for a previously captured payment
     def refund_payment(
         self,
         payment_id: str,
@@ -151,6 +167,7 @@ class RazorpayService:
             Refund response
         """
         refund_data = {}
+        # If amount specified, perform a partial refund; otherwise full refund
         if amount_paise:
             refund_data["amount"] = amount_paise
         if notes:
@@ -164,6 +181,7 @@ class RazorpayService:
             logger.error(f"Failed to create refund for payment {payment_id}: {str(e)}")
             raise
 
+    # Verify the HMAC-SHA256 signature on incoming Razorpay webhook requests
     def verify_webhook_signature(self, body: bytes, signature: str) -> bool:
         """
         Verify webhook signature.
@@ -175,21 +193,24 @@ class RazorpayService:
         Returns:
             True if valid, False otherwise
         """
+        # Skip verification if no webhook secret is configured
         if not self.webhook_secret:
             logger.warning("Webhook secret not configured, skipping verification")
             return True
 
         try:
+            # Compute expected HMAC-SHA256 signature using the webhook secret
             expected_signature = hmac.new(
                 key=self.webhook_secret.encode("utf-8"),
                 msg=body,
                 digestmod=hashlib.sha256
             ).hexdigest()
+            # Use constant-time comparison to prevent timing attacks
             return hmac.compare_digest(expected_signature, signature)
         except Exception as e:
             logger.error(f"Error verifying webhook signature: {str(e)}")
             return False
 
 
-# Singleton instance
+# Singleton instance — shared across the application for all Razorpay operations
 razorpay_service = RazorpayService()

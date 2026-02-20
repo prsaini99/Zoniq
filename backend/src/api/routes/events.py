@@ -1,6 +1,8 @@
 """
 Public Event APIs - accessible to all users (no authentication required)
 """
+# Event routes: public-facing endpoints for browsing, searching, and viewing events
+# All endpoints return only published events to ensure draft/archived events stay hidden
 import datetime
 from typing import Annotated
 
@@ -22,11 +24,13 @@ from src.repository.crud.event import EventCRUDRepository
 from src.repository.crud.seat_category import SeatCategoryCRUDRepository
 from src.repository.crud.seat import SeatCRUDRepository
 
+# All public event routes are grouped under the /events prefix
 router = fastapi.APIRouter(prefix="/events", tags=["events"])
 
 
 def _build_event_response(event) -> EventResponse:
     """Build EventResponse from Event model"""
+    # Extract compact venue info if the event has an associated venue
     venue = None
     if event.venue:
         venue = VenueCompact(
@@ -36,6 +40,7 @@ def _build_event_response(event) -> EventResponse:
             state=event.venue.state,
         )
 
+    # Map the event model to the summary response schema (excludes full description)
     return EventResponse(
         id=event.id,
         title=event.title,
@@ -64,6 +69,7 @@ def _build_event_response(event) -> EventResponse:
 
 def _build_event_detail_response(event) -> EventDetailResponse:
     """Build EventDetailResponse from Event model"""
+    # Extract compact venue info if the event has an associated venue
     venue = None
     if event.venue:
         venue = VenueCompact(
@@ -73,6 +79,7 @@ def _build_event_detail_response(event) -> EventDetailResponse:
             state=event.venue.state,
         )
 
+    # Map the event model to the full detail response (includes description, terms, etc.)
     return EventDetailResponse(
         id=event.id,
         title=event.title,
@@ -104,6 +111,7 @@ def _build_event_detail_response(event) -> EventDetailResponse:
     )
 
 
+# GET /events - List published events with pagination, filtering, and full-text search
 @router.get(
     "",
     name="events:list",
@@ -132,6 +140,7 @@ async def list_events(
     - **date_from**: Events starting from this date
     - **date_to**: Events until this date
     """
+    # Query the repository with all optional filters; published_only ensures drafts are excluded
     events, total = await event_repo.read_events(
         page=page,
         page_size=page_size,
@@ -143,6 +152,7 @@ async def list_events(
         published_only=True,
     )
 
+    # Return paginated list of event summaries along with total count for client-side pagination
     return EventListResponse(
         events=[_build_event_response(event) for event in events],
         total=total,
@@ -151,6 +161,7 @@ async def list_events(
     )
 
 
+# GET /events/search - Dedicated full-text search endpoint with required query parameter
 @router.get(
     "/search",
     name="events:search",
@@ -173,6 +184,7 @@ async def search_events(
 
     - **q**: Search query (required, 1-100 characters)
     """
+    # Perform full-text search; results are relevance-ranked by the repository layer
     events, total = await event_repo.read_events(
         page=page,
         page_size=page_size,
@@ -188,6 +200,7 @@ async def search_events(
     )
 
 
+# GET /events/upcoming - Retrieve a short list of upcoming events (future-dated, published)
 @router.get(
     "/upcoming",
     name="events:upcoming",
@@ -202,10 +215,12 @@ async def list_upcoming_events(
     ),
 ) -> list[EventResponse]:
     """Get upcoming events (published events with future dates)"""
+    # Fetch events sorted by nearest event_date, optionally filtered by category
     events = await event_repo.read_upcoming_events(limit=limit, category=category)
     return [_build_event_response(event) for event in events]
 
 
+# GET /events/categories - Return all available event category options for UI dropdowns
 @router.get(
     "/categories",
     name="events:categories",
@@ -214,12 +229,14 @@ async def list_upcoming_events(
 )
 async def list_event_categories() -> list[dict]:
     """Get all available event categories"""
+    # Convert the EventCategory enum into a list of value/label pairs for client consumption
     return [
         {"value": cat.value, "label": cat.value.replace("_", " ").title()}
         for cat in EventCategory
     ]
 
 
+# GET /events/{event_id_or_slug} - Get full event details by numeric ID or URL-friendly slug
 @router.get(
     "/{event_id_or_slug}",
     name="events:get",
@@ -237,14 +254,14 @@ async def get_event(
     Only returns published events.
     """
     try:
-        # Try to parse as integer (ID)
+        # Try to parse as integer (ID); fall back to slug-based lookup on ValueError
         event_id = int(event_id_or_slug)
         event = await event_repo.read_event_by_id(event_id=event_id)
     except ValueError:
         # Not an integer, treat as slug
         event = await event_repo.read_event_by_slug(slug=event_id_or_slug)
 
-    # Only return published events to public
+    # Only return published events to the public; hide drafts and archived events
     if event.status != EventStatus.PUBLISHED.value:
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_404_NOT_FOUND,
@@ -254,6 +271,7 @@ async def get_event(
     return _build_event_detail_response(event)
 
 
+# GET /events/{event_id}/categories - Get seat pricing tiers for a specific event
 @router.get(
     "/{event_id}/categories",
     name="events:categories",
@@ -270,7 +288,7 @@ async def get_event_categories(
     ),
 ) -> list[SeatCategoryResponse]:
     """Get seat categories (pricing tiers) for an event"""
-    # Verify event exists and is published
+    # Verify the event exists and is published before exposing category data
     event = await event_repo.read_event_by_id(event_id=event_id)
     if event.status != EventStatus.PUBLISHED.value:
         raise fastapi.HTTPException(
@@ -278,6 +296,7 @@ async def get_event_categories(
             detail="Event not found",
         )
 
+    # Fetch only active seat categories (inactive ones are hidden from public)
     categories = await category_repo.read_categories_by_event(
         event_id=event_id, active_only=True
     )
@@ -300,6 +319,7 @@ async def get_event_categories(
     ]
 
 
+# GET /events/{event_id}/seats - Get seat-level availability data for seat map rendering
 @router.get(
     "/{event_id}/seats",
     name="events:seats",
@@ -323,7 +343,7 @@ async def get_event_seats(
     Get seat availability for an event.
     Returns categories and individual seat status for seat map rendering.
     """
-    # Verify event exists and is published
+    # Verify the event exists and is published before exposing seat data
     event = await event_repo.read_event_by_id(event_id=event_id)
     if event.status != EventStatus.PUBLISHED.value:
         raise fastapi.HTTPException(
@@ -331,18 +351,19 @@ async def get_event_seats(
             detail="Event not found",
         )
 
-    # Get categories
+    # Fetch active seat categories for the event
     categories = await category_repo.read_categories_by_event(
         event_id=event_id, active_only=True
     )
 
-    # Get seats
+    # Fetch individual seats, optionally filtered by category_id for focused map views
     seats = await seat_repo.read_seats_by_event(
         event_id=event_id,
         category_id=category_id,
         include_category=False,
     )
 
+    # Build category response objects
     category_responses = [
         SeatCategoryResponse(
             id=cat.id,
@@ -360,6 +381,7 @@ async def get_event_seats(
         for cat in categories
     ]
 
+    # Build per-seat availability responses; override status to "available" when the seat is open
     seat_responses = [
         SeatAvailabilityResponse(
             id=seat.id,

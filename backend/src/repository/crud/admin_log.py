@@ -1,3 +1,4 @@
+# Admin activity log CRUD repository for recording and querying admin actions
 import datetime
 import typing
 
@@ -8,6 +9,8 @@ from src.repository.crud.base import BaseCRUDRepository
 
 
 class AdminLogCRUDRepository(BaseCRUDRepository):
+    # Creates a new admin activity log entry recording an action performed by an admin
+    # Captures who did what, to which entity, with optional details and IP address
     async def create_log(
         self,
         admin_id: int,
@@ -33,6 +36,9 @@ class AdminLogCRUDRepository(BaseCRUDRepository):
 
         return new_log
 
+    # Retrieves admin activity logs with pagination and optional filtering
+    # Can filter by admin_id, action type, entity type, and date range
+    # Returns a tuple of (log entries for the current page, total matching count)
     async def get_logs(
         self,
         page: int = 1,
@@ -44,10 +50,10 @@ class AdminLogCRUDRepository(BaseCRUDRepository):
         end_date: datetime.datetime | None = None,
     ) -> tuple[typing.Sequence[AdminActivityLog], int]:
         """Get admin activity logs with pagination and filtering"""
-        # Base query
+        # Base query selecting all admin activity logs
         stmt = sqlalchemy.select(AdminActivityLog)
 
-        # Apply filters
+        # Apply optional filters to narrow down results
         if admin_id:
             stmt = stmt.where(AdminActivityLog.admin_id == admin_id)
         if action:
@@ -59,12 +65,12 @@ class AdminLogCRUDRepository(BaseCRUDRepository):
         if end_date:
             stmt = stmt.where(AdminActivityLog.created_at <= end_date)
 
-        # Count total
+        # Count total matching records before applying pagination
         count_stmt = sqlalchemy.select(sqlalchemy.func.count()).select_from(stmt.subquery())
         count_result = await self.async_session.execute(statement=count_stmt)
         total = count_result.scalar() or 0
 
-        # Order and paginate
+        # Order by newest first and apply offset/limit pagination
         stmt = stmt.order_by(AdminActivityLog.created_at.desc())
         stmt = stmt.offset((page - 1) * page_size).limit(page_size)
 
@@ -73,12 +79,16 @@ class AdminLogCRUDRepository(BaseCRUDRepository):
 
         return logs, total
 
+    # Fetches a single admin activity log entry by its primary key ID
+    # Returns None if the log entry does not exist
     async def get_log_by_id(self, log_id: int) -> AdminActivityLog | None:
         """Get a specific admin activity log by ID"""
         stmt = sqlalchemy.select(AdminActivityLog).where(AdminActivityLog.id == log_id)
         query = await self.async_session.execute(statement=stmt)
         return query.scalar()
 
+    # Retrieves all admin activity logs related to a specific entity (e.g., all actions on user #42)
+    # Useful for viewing the complete audit trail of actions performed on an entity
     async def get_logs_for_entity(
         self,
         entity_type: str,

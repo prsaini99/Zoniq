@@ -1,3 +1,14 @@
+/*
+ * Wishlist page: displays the user's saved/favorited events in a responsive grid.
+ *
+ * Key features:
+ *   - Requires authentication; redirects to /login if not logged in.
+ *   - Fetches the wishlist from the wishlist store on mount.
+ *   - Each event card has a hover-reveal "Remove" button to remove it from the wishlist.
+ *   - Shows an empty state with a CTA to browse events when the wishlist is empty.
+ *   - Includes a "Tips" section at the bottom with helpful reminders for users.
+ */
+
 "use client";
 
 import { useEffect } from "react";
@@ -9,6 +20,7 @@ import { EventCard, EventCardSkeleton } from "@/components/events/event-card";
 import { useIsAuthenticated } from "@/store/auth";
 import { useWishlistStore, useWishlistItems } from "@/store/wishlist";
 
+// Empty state component shown when the wishlist has no items
 function EmptyState() {
   return (
     <div className="text-center py-12">
@@ -32,9 +44,11 @@ function EmptyState() {
 export default function WishlistPage() {
   const router = useRouter();
   const isAuthenticated = useIsAuthenticated();
+  // Wishlist items from the store (each item contains the associated event data)
   const items = useWishlistItems();
   const { fetchWishlist, removeFromWishlist, isLoading, error } = useWishlistStore();
 
+  // Redirect unauthenticated users to login, otherwise fetch the wishlist
   useEffect(() => {
     if (!isAuthenticated) {
       router.push("/login?redirect=/wishlist");
@@ -43,6 +57,7 @@ export default function WishlistPage() {
     fetchWishlist();
   }, [isAuthenticated, router, fetchWishlist]);
 
+  // Remove an event from the wishlist by its event ID
   const handleRemove = async (eventId: number) => {
     await removeFromWishlist(eventId);
   };
@@ -50,7 +65,7 @@ export default function WishlistPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
+        {/* Header with wishlist count and "Browse More" button */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
@@ -79,7 +94,7 @@ export default function WishlistPage() {
           </div>
         )}
 
-        {/* Loading State */}
+        {/* Loading State: skeleton cards while data is fetched */}
         {isLoading && (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <EventCardSkeleton />
@@ -88,7 +103,7 @@ export default function WishlistPage() {
           </div>
         )}
 
-        {/* Wishlist Items */}
+        {/* Wishlist Items grid with hover-reveal remove buttons */}
         {!isLoading && (
           <>
             {items.length === 0 ? (
@@ -98,7 +113,7 @@ export default function WishlistPage() {
                 {items.map((item) => (
                   <div key={item.id} className="relative group">
                     <EventCard event={item.event} />
-                    {/* Remove Button Overlay */}
+                    {/* Remove Button Overlay: visible on hover */}
                     <button
                       onClick={() => handleRemove(item.eventId)}
                       className="absolute top-3 right-3 p-2 rounded-full bg-background-card/90 backdrop-blur-sm border border-border opacity-0 group-hover:opacity-100 transition-opacity hover:bg-error/20 hover:border-error hover:text-error"
@@ -113,7 +128,7 @@ export default function WishlistPage() {
           </>
         )}
 
-        {/* Tips Section */}
+        {/* Tips Section: helpful advice shown below wishlist items */}
         {!isLoading && items.length > 0 && (
           <div className="mt-12">
             <Card>

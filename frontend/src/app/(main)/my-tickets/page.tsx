@@ -1,3 +1,19 @@
+/*
+ * My Tickets page: lists all of the authenticated user's event bookings.
+ *
+ * Key features:
+ *   - Tab-based filtering: "Upcoming" (future events, non-cancelled), "Past" (past events
+ *     or cancelled bookings), and "All" bookings.
+ *   - Each booking is rendered as a BookingCard showing event image, title, date/time,
+ *     venue, status badge, ticket count, total price, and action buttons.
+ *   - Action buttons: "View Tickets" and "Download" for confirmed upcoming bookings,
+ *     "Details" link for all bookings.
+ *   - Manual refresh button to re-fetch booking data.
+ *   - Status legend at the bottom explaining the meaning of each booking status.
+ *
+ * Requires authentication; redirects to /login if not authenticated.
+ */
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -23,6 +39,7 @@ import { bookingsApi } from "@/lib/api";
 import { formatDate, formatTime, formatPrice } from "@/lib/utils";
 import type { Booking, BookingStatus } from "@/types";
 
+// Maps each booking status string to a display label and badge color variant
 const STATUS_CONFIG: Record<
   string,
   { label: string; variant: "default" | "success" | "warning" | "error" }
@@ -36,6 +53,10 @@ const STATUS_CONFIG: Record<
 
 const DEFAULT_STATUS = { label: "Unknown", variant: "default" as const };
 
+/*
+ * BookingCard: renders a single booking row with event image, details, status,
+ * price, and contextual action buttons (view tickets, download, details).
+ */
 function BookingCard({ booking }: { booking: Booking }) {
   const router = useRouter();
   const status = STATUS_CONFIG[booking.status] || DEFAULT_STATUS;
@@ -46,7 +67,7 @@ function BookingCard({ booking }: { booking: Booking }) {
     <Card className="overflow-hidden hover:border-border-hover transition-colors">
       <CardContent className="p-0">
         <div className="flex flex-col sm:flex-row">
-          {/* Event Image */}
+          {/* Event Image (left side) with "Event Ended" overlay for past confirmed bookings */}
           <div className="relative w-full sm:w-48 h-32 sm:h-auto flex-shrink-0">
             {(booking.event?.thumbnailImageUrl || booking.event?.bannerImageUrl) ? (
               <Image
@@ -67,16 +88,18 @@ function BookingCard({ booking }: { booking: Booking }) {
             )}
           </div>
 
-          {/* Booking Details */}
+          {/* Booking Details (right side) */}
           <div className="flex-1 p-4">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
+                {/* Status badge and booking number */}
                 <div className="flex items-center gap-2 mb-1">
                   <Badge variant={status.variant}>{status.label}</Badge>
                   <span className="text-xs text-foreground-muted">
                     #{booking.bookingNumber}
                   </span>
                 </div>
+                {/* Event title links to the event detail page */}
                 <Link
                   href={`/events/${booking.event?.slug || ''}`}
                   className="text-lg font-semibold text-foreground hover:text-primary transition-colors line-clamp-1"
@@ -84,6 +107,7 @@ function BookingCard({ booking }: { booking: Booking }) {
                   {booking.event?.title || "Event"}
                 </Link>
               </div>
+              {/* Price and ticket count (right-aligned) */}
               <div className="text-right flex-shrink-0">
                 <p className="text-lg font-bold text-primary">
                   {formatPrice(parseFloat(booking.totalAmount))}
@@ -94,6 +118,7 @@ function BookingCard({ booking }: { booking: Booking }) {
               </div>
             </div>
 
+            {/* Event date, time, and venue metadata */}
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-foreground-muted">
               {booking.event && (
                 <>
@@ -118,7 +143,7 @@ function BookingCard({ booking }: { booking: Booking }) {
               )}
             </div>
 
-            {/* Actions */}
+            {/* Action buttons: context-dependent based on booking status and event timing */}
             <div className="mt-4 flex items-center gap-2">
               {booking.status === "confirmed" && !isPastEvent && (
                 <>
@@ -139,6 +164,7 @@ function BookingCard({ booking }: { booking: Booking }) {
                   </Button>
                 </>
               )}
+              {/* "Details" link always available */}
               <Button
                 size="sm"
                 variant="ghost"
@@ -156,6 +182,7 @@ function BookingCard({ booking }: { booking: Booking }) {
   );
 }
 
+// Skeleton loader for BookingCard while data is being fetched
 function BookingCardSkeleton() {
   return (
     <Card className="overflow-hidden">
@@ -185,6 +212,7 @@ function BookingCardSkeleton() {
   );
 }
 
+// Empty state shown when the user has no bookings at all
 function EmptyState() {
   return (
     <div className="text-center py-12">
@@ -202,6 +230,7 @@ function EmptyState() {
   );
 }
 
+// Tab type for filtering bookings
 type TabType = "all" | "upcoming" | "past";
 
 export default function MyTicketsPage() {
@@ -211,8 +240,10 @@ export default function MyTicketsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Default to "upcoming" tab
   const [activeTab, setActiveTab] = useState<TabType>("upcoming");
 
+  // Fetch all bookings from the API (up to 50)
   const fetchBookings = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -226,6 +257,7 @@ export default function MyTicketsPage() {
     }
   }, []);
 
+  // Redirect if not authenticated, otherwise fetch bookings on mount
   useEffect(() => {
     if (!isAuthenticated) {
       router.push("/login?redirect=/my-tickets");
@@ -234,6 +266,7 @@ export default function MyTicketsPage() {
     fetchBookings();
   }, [isAuthenticated, router, fetchBookings]);
 
+  // Filter bookings based on the active tab
   const now = new Date();
   const filteredBookings = bookings.filter((booking) => {
     const eventDate = booking.event ? new Date(booking.event.eventDate) : new Date();
@@ -246,6 +279,7 @@ export default function MyTicketsPage() {
     return true;
   });
 
+  // Compute counts for each tab
   const upcomingCount = bookings.filter(
     (b) => (b.event ? new Date(b.event.eventDate) >= now : false) && b.status !== "cancelled"
   ).length;
@@ -262,7 +296,7 @@ export default function MyTicketsPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
+        {/* Header with refresh button */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-foreground">My Tickets</h1>
@@ -280,7 +314,7 @@ export default function MyTicketsPage() {
           </Button>
         </div>
 
-        {/* Tabs */}
+        {/* Tab bar for filtering: upcoming / past / all */}
         <div className="flex gap-1 p-1 bg-background-soft rounded-lg mb-6">
           {tabs.map((tab) => (
             <button
@@ -292,6 +326,7 @@ export default function MyTicketsPage() {
                 }`}
             >
               {tab.label}
+              {/* Count badge next to tab label */}
               {tab.count > 0 && (
                 <span
                   className={`ml-2 px-1.5 py-0.5 rounded-full text-xs ${activeTab === tab.id
@@ -306,7 +341,7 @@ export default function MyTicketsPage() {
           ))}
         </div>
 
-        {/* Error State */}
+        {/* Error State with retry button */}
         {error && (
           <div className="mb-6 p-4 rounded-lg bg-error/10 text-error flex items-center gap-2">
             <AlertCircle className="h-5 w-5" />
@@ -322,7 +357,7 @@ export default function MyTicketsPage() {
           </div>
         )}
 
-        {/* Loading State */}
+        {/* Loading State: skeleton booking cards */}
         {isLoading && (
           <div className="space-y-4">
             <BookingCardSkeleton />
@@ -346,7 +381,7 @@ export default function MyTicketsPage() {
           </>
         )}
 
-        {/* Status Legend */}
+        {/* Status Legend: explains what each booking status means */}
         {!isLoading && bookings.length > 0 && (
           <div className="mt-8 p-4 bg-background-soft rounded-lg">
             <h4 className="text-sm font-medium text-foreground mb-3">Booking Status</h4>

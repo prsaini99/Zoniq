@@ -1,3 +1,5 @@
+# Account management routes: admin-level CRUD operations for user accounts
+# These endpoints are NOT guarded by authentication -- intended for admin/internal use
 import fastapi
 import pydantic
 
@@ -12,9 +14,11 @@ from src.utilities.exceptions.http.exc_404 import (
     http_404_exc_username_not_found_request,
 )
 
+# All account admin routes are grouped under the /accounts prefix
 router = fastapi.APIRouter(prefix="/accounts", tags=["accounts"])
 
 
+# GET /accounts - List all accounts with their generated access tokens
 @router.get(
     path="",
     name="accountss:read-accounts",
@@ -24,9 +28,11 @@ router = fastapi.APIRouter(prefix="/accounts", tags=["accounts"])
 async def get_accounts(
     account_repo: AccountCRUDRepository = fastapi.Depends(get_repository(repo_type=AccountCRUDRepository)),
 ) -> list[AccountInResponse]:
+    # Fetch every account from the database
     db_accounts = await account_repo.read_accounts()
     db_account_list: list = list()
 
+    # Build a response for each account, generating a fresh JWT per account
     for db_account in db_accounts:
         access_token = jwt_generator.generate_access_token(account=db_account)
         account = AccountInResponse(
@@ -47,6 +53,7 @@ async def get_accounts(
     return db_account_list
 
 
+# GET /accounts/{id} - Retrieve a single account by its primary key ID
 @router.get(
     path="/{id}",
     name="accountss:read-account-by-id",
@@ -57,6 +64,7 @@ async def get_account(
     id: int,
     account_repo: AccountCRUDRepository = fastapi.Depends(get_repository(repo_type=AccountCRUDRepository)),
 ) -> AccountInResponse:
+    # Attempt to read the account; raise 404 if not found
     try:
         db_account = await account_repo.read_account_by_id(id=id)
         access_token = jwt_generator.generate_access_token(account=db_account)
@@ -79,6 +87,7 @@ async def get_account(
     )
 
 
+# PATCH /accounts/{id} - Partially update an account's username, email, or password
 @router.patch(
     path="/{id}",
     name="accountss:update-account-by-id",
@@ -92,13 +101,16 @@ async def update_account(
     update_password: str | None = None,
     account_repo: AccountCRUDRepository = fastapi.Depends(get_repository(repo_type=AccountCRUDRepository)),
 ) -> AccountInResponse:
+    # Build the update payload from optional query parameters
     account_update = AccountInUpdate(username=update_username, email=update_email, password=update_password)
+    # Apply the update; raises 404 if the account ID does not exist
     try:
         updated_db_account = await account_repo.update_account_by_id(id=query_id, account_update=account_update)
 
     except EntityDoesNotExist:
         raise await http_404_exc_id_not_found_request(id=query_id)
 
+    # Generate a new token reflecting the updated account state
     access_token = jwt_generator.generate_access_token(account=updated_db_account)
 
     return AccountInResponse(
@@ -116,10 +128,12 @@ async def update_account(
     )
 
 
+# DELETE /accounts?id=<id> - Permanently delete an account by its ID
 @router.delete(path="", name="accountss:delete-account-by-id", status_code=fastapi.status.HTTP_200_OK)
 async def delete_account(
     id: int, account_repo: AccountCRUDRepository = fastapi.Depends(get_repository(repo_type=AccountCRUDRepository))
 ) -> dict[str, str]:
+    # Attempt deletion; raises 404 if the account does not exist
     try:
         deletion_result = await account_repo.delete_account_by_id(id=id)
 

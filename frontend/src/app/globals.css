@@ -1,36 +1,44 @@
+/* Import Tailwind CSS base, component, and utility layers */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ZONIQ Design System — Midnight Cinema */
+/* CSS custom properties (design tokens) for the dark theme color palette */
 :root {
+  /* Primary brand color (red) and its variants */
   --primary: #DC2626;
   --primary-hover: #B91C1C;
   --primary-light: rgba(220, 38, 38, 0.12);
   --primary-glow: rgba(220, 38, 38, 0.35);
 
+  /* Accent color (orange) and its variants */
   --accent: #F97316;
   --accent-light: rgba(249, 115, 22, 0.12);
 
+  /* Background shades from darkest to lightest */
   --background: #09090B;
   --background-soft: #111113;
   --background-card: #18181B;
   --background-elevated: #27272A;
 
+  /* Foreground (text) shades from brightest to most subtle */
   --foreground: #FAFAFA;
   --foreground-muted: #A1A1AA;
   --foreground-subtle: #52525B;
 
+  /* Border colors */
   --border: #27272A;
   --border-hover: #3F3F46;
 
+  /* Semantic status colors */
   --success: #10B981;
   --warning: #F59E0B;
   --error: #EF4444;
   --info: #3B82F6;
 }
 
-/* Base Styles */
+/* Base Styles — global reset and defaults */
 * {
   box-sizing: border-box;
   padding: 0;
@@ -52,7 +60,8 @@ body {
   position: relative;
 }
 
-/* Persistent background atmosphere — black to deep red */
+/* Persistent background atmosphere — layered radial gradients creating a subtle
+   deep-red ambiance behind all page content */
 body::after {
   content: "";
   position: fixed;
@@ -67,7 +76,8 @@ body::after {
     var(--background);
 }
 
-/* Subtle noise texture overlay */
+/* Subtle noise texture overlay — adds a film-grain-like texture across the entire page
+   at very low opacity for visual depth */
 body::before {
   content: "";
   position: fixed;
@@ -80,7 +90,7 @@ body::before {
   background-size: 128px 128px;
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar — thin, dark scrollbar matching the theme */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -99,25 +109,27 @@ body::before {
   background: var(--foreground-subtle);
 }
 
-/* Selection */
+/* Text Selection — red highlight with white text */
 ::selection {
   background: var(--primary);
   color: white;
 }
 
-/* Focus Styles */
+/* Focus Styles — consistent red outline for keyboard navigation accessibility */
 *:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
-/* Link Styles */
+/* Link Styles — inherit color and remove default underlines */
 a {
   color: inherit;
   text-decoration: none;
 }
 
-/* Animations */
+/* ============ Animation Keyframes ============ */
+
+/* Fade in from below */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -129,6 +141,7 @@ a {
   }
 }
 
+/* Slide in from the left */
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -140,6 +153,7 @@ a {
   }
 }
 
+/* Pulse opacity for loading/attention indicators */
 @keyframes pulse {
   0%, 100% {
     opacity: 1;
@@ -149,6 +163,7 @@ a {
   }
 }
 
+/* Continuous rotation for loading spinners */
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -158,6 +173,7 @@ a {
   }
 }
 
+/* Pulsing border glow effect using the primary red color */
 @keyframes borderGlow {
   0%, 100% {
     border-color: rgba(220, 38, 38, 0.2);
@@ -167,6 +183,7 @@ a {
   }
 }
 
+/* Shifting gradient background position for animated gradient text */
 @keyframes gradientShift {
   0% {
     background-position: 0% 50%;
@@ -179,19 +196,26 @@ a {
   }
 }
 
+/* ============ Animation Utility Classes ============ */
+
+/* Fade-in animation with upward motion */
 .animate-fade-in {
   animation: fadeIn 0.5s ease-out forwards;
 }
 
+/* Slide-in animation from the left */
 .animate-slide-in {
   animation: slideIn 0.3s ease-out forwards;
 }
 
+/* Custom pulse animation for loading states */
 .animate-pulse-custom {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Glass morphism — refined */
+/* ============ Glass Morphism Effects ============ */
+
+/* Standard glass effect — semi-transparent with blur and saturation boost */
 .glass {
   background: rgba(17, 17, 19, 0.75);
   backdrop-filter: blur(20px) saturate(1.4);
@@ -199,6 +223,7 @@ a {
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* Strong glass effect — more opaque with stronger blur */
 .glass-strong {
   background: rgba(17, 17, 19, 0.88);
   backdrop-filter: blur(32px) saturate(1.6);
@@ -206,7 +231,9 @@ a {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Gradient text */
+/* ============ Gradient Text Effects ============ */
+
+/* Animated gradient text — red-to-orange gradient that shifts continuously */
 .gradient-text {
   background: linear-gradient(135deg, #DC2626 0%, #F97316 50%, #DC2626 100%);
   background-size: 200% auto;
@@ -216,6 +243,7 @@ a {
   animation: gradientShift 4s ease-in-out infinite;
 }
 
+/* Static gradient text — red-to-orange without animation */
 .gradient-text-static {
   background: linear-gradient(135deg, #DC2626 0%, #F97316 100%);
   -webkit-background-clip: text;
@@ -223,7 +251,9 @@ a {
   background-clip: text;
 }
 
-/* Hover lift with glow */
+/* ============ Interactive Effects ============ */
+
+/* Hover lift — card lifts upward with enhanced shadow on hover */
 .hover-lift {
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -233,7 +263,7 @@ a {
   box-shadow: 0 16px 48px -8px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(220, 38, 38, 0.1);
 }
 
-/* Gradient border effect */
+/* Gradient border — reveals a red-to-orange gradient border on hover using mask compositing */
 .gradient-border {
   position: relative;
   background: var(--background-card);
@@ -259,7 +289,7 @@ a {
   opacity: 1;
 }
 
-/* Ambient glow spot */
+/* Ambient glow — soft red radial glow behind the element */
 .ambient-glow {
   position: relative;
 }
@@ -278,7 +308,8 @@ a {
   z-index: -1;
 }
 
-/* Stagger delay utilities */
+/* ============ Stagger Delay Utilities ============ */
+/* Used to create cascading animation effects on lists of elements */
 .stagger-1 { animation-delay: 0.05s; }
 .stagger-2 { animation-delay: 0.1s; }
 .stagger-3 { animation-delay: 0.15s; }
@@ -286,7 +317,8 @@ a {
 .stagger-5 { animation-delay: 0.25s; }
 .stagger-6 { animation-delay: 0.3s; }
 
-/* Container */
+/* ============ Container ============ */
+/* Responsive centered container with max-width and horizontal padding */
 .container {
   width: 100%;
   max-width: 1280px;
@@ -296,6 +328,7 @@ a {
   padding-right: 1rem;
 }
 
+/* Increase horizontal padding at tablet breakpoint */
 @media (min-width: 640px) {
   .container {
     padding-left: 1.5rem;
@@ -303,6 +336,7 @@ a {
   }
 }
 
+/* Increase horizontal padding at desktop breakpoint */
 @media (min-width: 1024px) {
   .container {
     padding-left: 2rem;
@@ -310,8 +344,10 @@ a {
   }
 }
 
+/* ============ Tailwind Utility Layer ============ */
 /* Smooth page transitions */
 @layer utilities {
+  /* CSS text-wrap: balance for even line distribution in headings */
   .text-balance {
     text-wrap: balance;
   }

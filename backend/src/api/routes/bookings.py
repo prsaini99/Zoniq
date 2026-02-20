@@ -1,3 +1,5 @@
+# Booking routes: view, retrieve, and cancel user bookings
+# All endpoints require authentication and enforce ownership checks (users can only access their own bookings)
 import fastapi
 from fastapi import Depends, HTTPException
 
@@ -15,11 +17,13 @@ from src.models.schemas.booking import (
 from src.repository.crud.booking import BookingCRUDRepository
 from src.utilities.exceptions.database import EntityDoesNotExist
 
+# Bookings router has no prefix; individual routes define their full paths
 router = fastapi.APIRouter(tags=["bookings"])
 
 
 def _build_booking_response(booking, include_items: bool = False):
     """Build a BookingResponse from a Booking model instance."""
+    # Extract event and venue details if the event relationship is loaded
     event_info = None
     if booking.event:
         venue_name = None
@@ -39,6 +43,7 @@ def _build_booking_response(booking, include_items: bool = False):
             venue_city=venue_city,
         )
 
+    # Shared fields between summary and detail responses
     base = dict(
         id=booking.id,
         booking_number=booking.booking_number,
@@ -58,6 +63,7 @@ def _build_booking_response(booking, include_items: bool = False):
         updated_at=booking.updated_at,
     )
 
+    # When include_items is True, attach the full list of individual ticket items
     if include_items:
         items = [
             BookingItemResponse(
@@ -76,9 +82,11 @@ def _build_booking_response(booking, include_items: bool = False):
         ]
         return BookingDetailResponse(**base, items=items)
 
+    # Return the summary response without individual ticket items
     return BookingResponse(**base)
 
 
+# GET /users/me/bookings - List the authenticated user's bookings with pagination and optional status filter
 @router.get(
     "/users/me/bookings",
     name="bookings:list-my-bookings",
@@ -93,6 +101,7 @@ async def list_my_bookings(
     booking_repo: BookingCRUDRepository = Depends(get_repository(repo_type=BookingCRUDRepository)),
 ) -> BookingListResponse:
     """Get the current user's bookings with pagination."""
+    # Fetch paginated bookings scoped to the current user, optionally filtered by status
     bookings, total = await booking_repo.read_bookings_by_user(
         user_id=current_user.id,
         page=page,
@@ -100,6 +109,7 @@ async def list_my_bookings(
         status=status,
     )
 
+    # Return summary-level booking responses (without individual ticket items)
     return BookingListResponse(
         bookings=[_build_booking_response(b) for b in bookings],
         total=total,
@@ -108,6 +118,7 @@ async def list_my_bookings(
     )
 
 
+# GET /bookings/{booking_id} - Get full booking details by numeric ID (ownership enforced)
 @router.get(
     "/bookings/{booking_id}",
     name="bookings:get-booking",
@@ -120,17 +131,21 @@ async def get_booking(
     booking_repo: BookingCRUDRepository = Depends(get_repository(repo_type=BookingCRUDRepository)),
 ) -> BookingDetailResponse:
     """Get a booking by ID (must be owned by current user)."""
+    # Attempt to fetch the booking; raises 404 if not found
     try:
         booking = await booking_repo.read_booking_by_id(booking_id)
     except EntityDoesNotExist:
         raise HTTPException(status_code=404, detail="Booking not found")
 
+    # Ownership check: users can only view their own bookings
     if booking.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # Return the full detail response including individual ticket items
     return _build_booking_response(booking, include_items=True)
 
 
+# GET /bookings/number/{booking_number} - Get full booking details by human-readable booking number
 @router.get(
     "/bookings/number/{booking_number}",
     name="bookings:get-booking-by-number",
@@ -143,17 +158,20 @@ async def get_booking_by_number(
     booking_repo: BookingCRUDRepository = Depends(get_repository(repo_type=BookingCRUDRepository)),
 ) -> BookingDetailResponse:
     """Get a booking by booking number (must be owned by current user)."""
+    # Look up the booking using the human-readable booking number string
     try:
         booking = await booking_repo.read_booking_by_number(booking_number)
     except EntityDoesNotExist:
         raise HTTPException(status_code=404, detail="Booking not found")
 
+    # Ownership check: users can only view their own bookings
     if booking.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     return _build_booking_response(booking, include_items=True)
 
 
+# POST /bookings/{booking_id}/cancel - Cancel an existing booking (ownership enforced)
 @router.post(
     "/bookings/{booking_id}/cancel",
     name="bookings:cancel-booking",
@@ -167,6 +185,8 @@ async def cancel_booking(
     booking_repo: BookingCRUDRepository = Depends(get_repository(repo_type=BookingCRUDRepository)),
 ) -> BookingDetailResponse:
     """Cancel a booking (must be owned by current user)."""
+    # Attempt cancellation; the repository handles ownership validation and status transitions
+    # Raises EntityDoesNotExist if not found, ValueError if booking cannot be cancelled (e.g., already cancelled)
     try:
         booking = await booking_repo.cancel_booking(
             booking_id=booking_id,
@@ -177,4 +197,5 @@ async def cancel_booking(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Return the updated booking with cancellation status and all ticket items
     return _build_booking_response(booking, include_items=True)

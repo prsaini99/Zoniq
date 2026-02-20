@@ -1,3 +1,20 @@
+/**
+ * EditEventPage - Admin page for editing an existing event and managing its seat categories.
+ *
+ * Dynamic route: /admin/events/[id]/edit
+ *
+ * Two tabs:
+ * 1. "Event Details" - Editable form for title, slug, category, venue, descriptions,
+ *    date/time, settings (max tickets, featured), queue settings, and image URLs.
+ *    Submits via PATCH to /admin/events/:id.
+ * 2. "Seat Categories" - Lists existing seat categories with price/seats/color.
+ *    Allows adding new categories (POST) and deleting existing ones (DELETE).
+ *
+ * Also provides top-level action buttons for publish, cancel, or reactivate
+ * depending on the current event status.
+ *
+ * On mount, fetches event data, venues list, and seat categories in parallel.
+ */
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -15,12 +32,14 @@ import {
 import { Button, Card, CardContent } from "@/components/ui";
 import api from "@/lib/api";
 
+// Venue shape for the dropdown
 interface Venue {
   id: number;
   name: string;
   city: string | null;
 }
 
+// Shape of a seat category associated with an event
 interface SeatCategory {
   id: number;
   name: string;
@@ -30,6 +49,7 @@ interface SeatCategory {
   color: string;
 }
 
+// Full event data shape returned by the admin API
 interface EventData {
   id: number;
   title: string;
@@ -56,6 +76,7 @@ interface EventData {
   queueProcessingMinutes: number | null;
 }
 
+// Local form state shape (snake_case to match API payload)
 interface EventFormData {
   title: string;
   slug: string;
@@ -79,6 +100,7 @@ interface EventFormData {
   queue_processing_minutes: number;
 }
 
+// Form data for adding a new seat category
 interface CategoryFormData {
   name: string;
   price: number;
@@ -86,6 +108,7 @@ interface CategoryFormData {
   color_code: string;
 }
 
+// Event category options for the select dropdown
 const CATEGORIES = [
   { value: "concert", label: "Concert" },
   { value: "sports", label: "Sports" },
@@ -98,6 +121,7 @@ const CATEGORIES = [
   { value: "other", label: "Other" },
 ];
 
+// Color options for seat category badges
 const COLORS = [
   { value: "#FFD700", label: "Gold" },
   { value: "#C0C0C0", label: "Silver" },
@@ -108,6 +132,7 @@ const COLORS = [
   { value: "#9370DB", label: "Purple" },
 ];
 
+// Converts an ISO date string to the "YYYY-MM-DDThh:mm" format expected by datetime-local inputs
 function formatDateForInput(dateStr: string | null): string {
   if (!dateStr) return "";
   try {
@@ -121,17 +146,20 @@ function formatDateForInput(dateStr: string | null): string {
 export default function EditEventPage() {
   const router = useRouter();
   const params = useParams();
+  // Extract event ID from the dynamic route segment
   const eventId = params.id as string;
 
+  // Core page state
   const [event, setEvent] = useState<EventData | null>(null);
   const [formData, setFormData] = useState<EventFormData | null>(null);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Tab state: "details" (edit form) or "categories" (seat management)
   const [activeTab, setActiveTab] = useState<"details" | "categories">("details");
 
-  // Category form state
+  // Seat category form state
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [categoryForm, setCategoryForm] = useState<CategoryFormData>({
     name: "",
@@ -142,6 +170,7 @@ export default function EditEventPage() {
   const [isCategorySubmitting, setIsCategorySubmitting] = useState(false);
   const [seatCategories, setSeatCategories] = useState<SeatCategory[]>([]);
 
+  // Fetches event details and maps API response (camelCase) into form state (snake_case)
   const fetchEvent = useCallback(async () => {
     try {
       const res = await api.get(`/admin/events/${eventId}`);
@@ -174,6 +203,7 @@ export default function EditEventPage() {
     }
   }, [eventId]);
 
+  // Fetches seat categories for this event and normalizes API response
   const fetchCategories = useCallback(async () => {
     try {
       const res = await api.get(`/admin/events/${eventId}/categories`);
@@ -192,6 +222,7 @@ export default function EditEventPage() {
     }
   }, [eventId]);
 
+  // Initial data load: fetch event, venues, and categories in parallel
   useEffect(() => {
     const init = async () => {
       setIsLoading(true);
@@ -211,6 +242,7 @@ export default function EditEventPage() {
     init();
   }, [fetchEvent, fetchCategories]);
 
+  // Handles event details form submission (PATCH)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData) return;
@@ -256,6 +288,7 @@ export default function EditEventPage() {
     }
   };
 
+  // Generic change handler for form fields
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -270,6 +303,7 @@ export default function EditEventPage() {
     );
   };
 
+  // Publish a draft event
   const handlePublish = async () => {
     try {
       await api.post(`/admin/events/${eventId}/publish`);
@@ -279,6 +313,7 @@ export default function EditEventPage() {
     }
   };
 
+  // Cancel a published event with confirmation
   const handleCancel = async () => {
     if (!confirm("Are you sure you want to cancel this event?")) return;
     try {
@@ -289,6 +324,7 @@ export default function EditEventPage() {
     }
   };
 
+  // Reactivate a cancelled event (returns to draft) with confirmation
   const handleReactivate = async () => {
     if (!confirm("Reactivate this event? It will be set to draft status.")) return;
     try {
@@ -299,6 +335,7 @@ export default function EditEventPage() {
     }
   };
 
+  // Add a new seat category to this event
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsCategorySubmitting(true);
@@ -315,6 +352,7 @@ export default function EditEventPage() {
     }
   };
 
+  // Delete a seat category with confirmation
   const handleDeleteCategory = async (categoryId: number) => {
     if (!confirm("Are you sure you want to delete this category?")) return;
     try {
@@ -327,6 +365,7 @@ export default function EditEventPage() {
     }
   };
 
+  // Loading spinner
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -335,6 +374,7 @@ export default function EditEventPage() {
     );
   }
 
+  // Not-found state
   if (!event || !formData) {
     return (
       <div className="text-center py-12">
@@ -348,7 +388,7 @@ export default function EditEventPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Page Header: back button, title, and status-dependent action buttons */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/admin/events">
@@ -362,6 +402,7 @@ export default function EditEventPage() {
             <p className="text-foreground-muted">Edit event details and manage categories</p>
           </div>
         </div>
+        {/* Status transition buttons */}
         <div className="flex gap-2">
           {event.status === "draft" && (
             <Button onClick={handlePublish} className="bg-success hover:bg-success/90">
@@ -384,7 +425,7 @@ export default function EditEventPage() {
         </div>
       </div>
 
-      {/* Status Badge */}
+      {/* Status Badge and category count */}
       <div className="flex items-center gap-4">
         <span
           className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -404,14 +445,14 @@ export default function EditEventPage() {
         </span>
       </div>
 
-      {/* Error Message */}
+      {/* Error Message Banner */}
       {error && (
         <div className="p-4 bg-error/10 border border-error/20 rounded-lg text-error">
           {error}
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Tab Navigation: Event Details / Seat Categories */}
       <div className="flex gap-4 border-b border-border">
         <button
           onClick={() => setActiveTab("details")}
@@ -437,10 +478,12 @@ export default function EditEventPage() {
 
       {/* Tab Content */}
       {activeTab === "details" ? (
+        /* ===== EVENT DETAILS TAB ===== */
         <form onSubmit={handleSubmit}>
           <div className="grid gap-6 lg:grid-cols-3">
-            {/* Main Content */}
+            {/* Main Content (left 2/3) */}
             <div className="lg:col-span-2 space-y-6">
+              {/* Basic Information */}
               <Card>
                 <CardContent className="p-6 space-y-4">
                   <h2 className="text-lg font-semibold text-foreground">Basic Information</h2>
@@ -472,6 +515,7 @@ export default function EditEventPage() {
                     />
                   </div>
 
+                  {/* Category and venue selectors */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-1">
@@ -520,6 +564,7 @@ export default function EditEventPage() {
                     </div>
                   </div>
 
+                  {/* Short and full descriptions */}
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
                       Short Description
@@ -548,6 +593,7 @@ export default function EditEventPage() {
                 </CardContent>
               </Card>
 
+              {/* Date & Time Section */}
               <Card>
                 <CardContent className="p-6 space-y-4">
                   <h2 className="text-lg font-semibold text-foreground">Date & Time</h2>
@@ -614,8 +660,9 @@ export default function EditEventPage() {
               </Card>
             </div>
 
-            {/* Sidebar */}
+            {/* Sidebar (right 1/3) */}
             <div className="space-y-6">
+              {/* Settings Card */}
               <Card>
                 <CardContent className="p-6 space-y-4">
                   <h2 className="text-lg font-semibold text-foreground">Settings</h2>
@@ -650,7 +697,7 @@ export default function EditEventPage() {
                 </CardContent>
               </Card>
 
-              {/* Queue Settings */}
+              {/* Queue Settings Card - for high-demand events with virtual queuing */}
               <Card>
                 <CardContent className="p-6 space-y-4">
                   <h2 className="text-lg font-semibold text-foreground">Queue Settings</h2>
@@ -672,6 +719,7 @@ export default function EditEventPage() {
                     </label>
                   </div>
 
+                  {/* Queue batch size and processing time inputs (shown only when queue is enabled) */}
                   {formData.queue_enabled && (
                     <>
                       <div>
@@ -714,6 +762,7 @@ export default function EditEventPage() {
                 </CardContent>
               </Card>
 
+              {/* Save Changes Button */}
               <Card>
                 <CardContent className="p-6 space-y-3">
                   <Button type="submit" className="w-full" disabled={isSubmitting}>
@@ -730,8 +779,9 @@ export default function EditEventPage() {
           </div>
         </form>
       ) : (
+        /* ===== SEAT CATEGORIES TAB ===== */
         <div className="space-y-6">
-          {/* Add Category Button */}
+          {/* Button to open the add-category form */}
           <div className="flex justify-end">
             <Button onClick={() => setShowCategoryForm(true)}>
               <Plus className="h-4 w-4 mr-2" />
@@ -739,7 +789,7 @@ export default function EditEventPage() {
             </Button>
           </div>
 
-          {/* Category Form Modal */}
+          {/* Inline category creation form (shown when user clicks "Add Seat Category") */}
           {showCategoryForm && (
             <Card>
               <CardContent className="p-6">
@@ -834,7 +884,7 @@ export default function EditEventPage() {
             </Card>
           )}
 
-          {/* Categories List */}
+          {/* Seat Categories Grid - card per category showing color, price, seats */}
           {seatCategories && seatCategories.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {seatCategories.map((category) => (
@@ -842,12 +892,14 @@ export default function EditEventPage() {
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
+                        {/* Color swatch for the category */}
                         <div
                           className="w-4 h-4 rounded-full"
                           style={{ backgroundColor: category.color }}
                         />
                         <h3 className="font-semibold text-foreground">{category.name}</h3>
                       </div>
+                      {/* Delete category button */}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -879,6 +931,7 @@ export default function EditEventPage() {
               ))}
             </div>
           ) : (
+            /* Empty state when no categories exist yet */
             <Card>
               <CardContent className="p-12 text-center">
                 <p className="text-foreground-muted mb-4">No seat categories yet</p>

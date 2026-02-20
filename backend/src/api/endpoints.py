@@ -1,3 +1,4 @@
+# Central API router -- aggregates all route modules and organises them by access level
 import fastapi
 
 from src.api.routes.account import router as account_router
@@ -20,14 +21,15 @@ from src.api.routes.admin.seats import router as admin_seats_router
 from src.api.routes.admin.bookings import router as admin_bookings_router
 from src.api.routes.admin.dashboard import router as admin_dashboard_router
 
+# Top-level router that all sub-routers are attached to; mounted in main.py under API_PREFIX
 router = fastapi.APIRouter()
 
-# Public routes
+# Public routes -- accessible without authentication
 router.include_router(router=account_router)
 router.include_router(router=auth_router)
 router.include_router(router=events_router)
 
-# User routes (authenticated)
+# User routes -- require an authenticated user (JWT bearer token)
 router.include_router(router=users_router)
 router.include_router(router=cart_router)
 router.include_router(router=bookings_router)
@@ -37,10 +39,10 @@ router.include_router(router=notifications_router)
 router.include_router(router=queue_router)
 router.include_router(router=wishlist_router)
 
-# WebSocket routes
+# WebSocket routes -- real-time bidirectional communication endpoints
 router.include_router(router=websocket_router)
 
-# Admin routes
+# Admin routes -- require admin role; all prefixed with /admin
 router.include_router(router=admin_users_router, prefix="/admin")
 router.include_router(router=admin_logs_router, prefix="/admin")
 router.include_router(router=admin_venues_router, prefix="/admin")

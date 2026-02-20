@@ -1,8 +1,15 @@
+/* Root layout for the entire ZONIQ application.
+ * Sets up custom fonts (Space Grotesk for sans-serif, JetBrains Mono for monospace),
+ * defines global SEO metadata (Open Graph, Twitter cards, robots directives),
+ * and wraps all pages in a dark-themed HTML shell with antialiased text rendering.
+ */
+
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
+// Load Space Grotesk as the primary sans-serif font from a local variable font file
 const spaceGrotesk = localFont({
   src: "../fonts/SpaceGrotesk-Variable.ttf",
   variable: "--font-sans",
@@ -10,12 +17,14 @@ const spaceGrotesk = localFont({
   weight: "300 700",
 });
 
+// Load JetBrains Mono from Google Fonts for monospace/code contexts
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
   display: "swap",
 });
 
+// Global SEO metadata: title template, description, keywords, OpenGraph, and Twitter cards
 export const metadata: Metadata = {
   title: {
     default: "ZONIQ - Event Ticket Booking",
@@ -48,6 +57,7 @@ export const metadata: Metadata = {
   },
 };
 
+// Root layout component: applies font CSS variables and dark theme to the HTML element
 export default function RootLayout({
   children,
 }: Readonly<{

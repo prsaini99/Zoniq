@@ -1,3 +1,4 @@
+# Notification preference routes: retrieve and update per-user email notification settings
 import logging
 
 import fastapi
@@ -17,6 +18,9 @@ logger = logging.getLogger(__name__)
 router = fastapi.APIRouter(prefix="/users/me/notifications", tags=["notifications"])
 
 
+# --- GET /users/me/notifications/preferences ---
+# Returns the current user's notification preferences.
+# If no preferences exist yet, a default set is created automatically (opt-in by default).
 @router.get(
     "/preferences",
     name="notifications:get-preferences",
@@ -30,8 +34,10 @@ async def get_notification_preferences(
     ),
 ) -> NotificationPreferenceResponse:
     """Get notification preferences for the current user."""
+    # Fetch existing preferences or create defaults if this is the user's first access
     preferences = await notification_repo.get_or_create_preferences(current_user.id)
 
+    # Map the database model fields to the response schema
     return NotificationPreferenceResponse(
         email_booking_confirmation=preferences.email_booking_confirmation,
         email_payment_updates=preferences.email_payment_updates,
@@ -45,6 +51,10 @@ async def get_notification_preferences(
     )
 
 
+# --- PATCH /users/me/notifications/preferences ---
+# Partially updates the user's notification preferences.
+# Only the fields provided in the request body are updated; omitted fields remain unchanged.
+# Each field controls whether a specific category of email notification is enabled or disabled.
 @router.patch(
     "/preferences",
     name="notifications:update-preferences",
@@ -59,6 +69,7 @@ async def update_notification_preferences(
     ),
 ) -> NotificationPreferenceResponse:
     """Update notification preferences for the current user."""
+    # Apply the partial update; None values in the request are skipped by the repository
     preferences = await notification_repo.update_preferences(
         user_id=current_user.id,
         email_booking_confirmation=update_data.email_booking_confirmation,
@@ -70,6 +81,7 @@ async def update_notification_preferences(
         email_marketing=update_data.email_marketing,
     )
 
+    # Return the full updated preference set
     return NotificationPreferenceResponse(
         email_booking_confirmation=preferences.email_booking_confirmation,
         email_payment_updates=preferences.email_payment_updates,

@@ -1,3 +1,4 @@
+# Wishlist routes: let authenticated users save, remove, list, and check events in their wishlist
 """
 Wishlist API Routes
 """
@@ -15,6 +16,8 @@ from src.utilities.exceptions.database import EntityDoesNotExist, EntityAlreadyE
 router = fastapi.APIRouter(prefix="/users/me/wishlist", tags=["wishlist"])
 
 
+# Helper to convert an Event ORM model into an EventResponse schema.
+# Includes a compact venue representation if the event has a linked venue.
 def _build_event_response(event) -> EventResponse:
     """Build EventResponse from Event model"""
     venue = None
@@ -52,6 +55,9 @@ def _build_event_response(event) -> EventResponse:
     )
 
 
+# --- GET /users/me/wishlist ---
+# Returns all events the authenticated user has added to their wishlist.
+# Each item includes full event details and the timestamp when it was wishlisted.
 @router.get(
     "",
     name="wishlist:list",
@@ -65,8 +71,10 @@ async def get_wishlist(
     ),
 ) -> WishlistResponse:
     """Get user's wishlist"""
+    # Fetch all wishlist items for the current user, eagerly loading related events
     items = await wishlist_repo.get_user_wishlist(account_id=current_user.id)
 
+    # Transform each wishlist database record into a response schema with event details
     response_items = [
         WishlistItemResponse(
             id=item.id,
@@ -80,6 +88,9 @@ async def get_wishlist(
     return WishlistResponse(items=response_items, total=len(response_items))
 
 
+# --- POST /users/me/wishlist/{event_id} ---
+# Adds a specific event to the current user's wishlist.
+# Returns 400 if the event is already wishlisted, 404 if the event does not exist.
 @router.post(
     "/{event_id}",
     name="wishlist:add",
@@ -95,6 +106,7 @@ async def add_to_wishlist(
 ) -> WishlistItemResponse:
     """Add an event to wishlist"""
     try:
+        # Create the wishlist entry linking the user to the event
         item = await wishlist_repo.add_to_wishlist(
             account_id=current_user.id,
             event_id=event_id,
@@ -106,17 +118,22 @@ async def add_to_wishlist(
             created_at=item.created_at,
         )
     except EntityAlreadyExists as e:
+        # The user has already added this event to their wishlist
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
     except EntityDoesNotExist as e:
+        # The specified event ID does not exist in the database
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_404_NOT_FOUND,
             detail=str(e),
         )
 
 
+# --- DELETE /users/me/wishlist/{event_id} ---
+# Removes an event from the current user's wishlist.
+# Returns 404 if the event was not in the wishlist.
 @router.delete(
     "/{event_id}",
     name="wishlist:remove",
@@ -131,18 +148,23 @@ async def remove_from_wishlist(
 ) -> dict:
     """Remove an event from wishlist"""
     try:
+        # Delete the wishlist record for this user-event combination
         await wishlist_repo.remove_from_wishlist(
             account_id=current_user.id,
             event_id=event_id,
         )
         return {"message": "Event removed from wishlist"}
     except EntityDoesNotExist as e:
+        # The event was not in the user's wishlist to begin with
         raise fastapi.HTTPException(
             status_code=fastapi.status.HTTP_404_NOT_FOUND,
             detail=str(e),
         )
 
 
+# --- GET /users/me/wishlist/{event_id}/check ---
+# Quick boolean check to see if a specific event is in the user's wishlist.
+# Useful for toggling the wishlist icon state on the frontend event card.
 @router.get(
     "/{event_id}/check",
     name="wishlist:check",
@@ -157,6 +179,7 @@ async def check_wishlist(
     ),
 ) -> WishlistCheckResponse:
     """Check if an event is in user's wishlist"""
+    # Perform a lightweight existence check without loading the full record
     is_in = await wishlist_repo.is_in_wishlist(
         account_id=current_user.id,
         event_id=event_id,

@@ -1,3 +1,8 @@
+# Notification CRUD repository -- manages per-user email notification preferences.
+# Provides get-or-create semantics for preferences, granular updates for each
+# notification type, and a lookup method to check whether a specific email type
+# should be sent to a given user.
+
 import logging
 from datetime import datetime
 
@@ -15,6 +20,8 @@ logger = logging.getLogger(__name__)
 class NotificationCRUDRepository(BaseCRUDRepository):
     """Repository for notification preference operations."""
 
+    # Retrieves the user's notification preferences. If no preferences record exists
+    # yet (e.g., new user), creates one with default values and persists it.
     async def get_or_create_preferences(self, user_id: int) -> NotificationPreference:
         """Get notification preferences for a user, creating defaults if not exists."""
         stmt = select(NotificationPreference).where(
@@ -25,6 +32,7 @@ class NotificationCRUDRepository(BaseCRUDRepository):
 
         if not preferences:
             # Create default preferences
+            # Default values are defined in the NotificationPreference model.
             preferences = NotificationPreference(user_id=user_id)
             self.async_session.add(preferences)
             await self.async_session.commit()
@@ -32,6 +40,10 @@ class NotificationCRUDRepository(BaseCRUDRepository):
 
         return preferences
 
+    # Updates individual notification preference flags for a user.
+    # Only fields explicitly passed (non-None) are updated; others remain unchanged.
+    # Covers all email notification types: booking confirmations, payment updates,
+    # ticket delivery, event reminders/updates, transfer notifications, and marketing.
     async def update_preferences(
         self,
         user_id: int,
@@ -77,6 +89,10 @@ class NotificationCRUDRepository(BaseCRUDRepository):
 
         return preferences
 
+    # Checks whether a specific email notification type is enabled for a user.
+    # Maps email_type strings (e.g., "booking_confirmation") to the corresponding
+    # preference boolean. Returns True by default for unknown types to avoid
+    # accidentally suppressing important emails.
     async def should_send_email(self, user_id: int, email_type: str) -> bool:
         """
         Check if a specific email type should be sent to the user.
@@ -89,6 +105,7 @@ class NotificationCRUDRepository(BaseCRUDRepository):
         """
         preferences = await self.get_or_create_preferences(user_id)
 
+        # Map email type strings to their corresponding preference attribute values.
         type_mapping = {
             "booking_confirmation": preferences.email_booking_confirmation,
             "payment_updates": preferences.email_payment_updates,
@@ -99,4 +116,5 @@ class NotificationCRUDRepository(BaseCRUDRepository):
             "marketing": preferences.email_marketing,
         }
 
+        # Default to True for unrecognized types as a safety measure.
         return type_mapping.get(email_type, True)

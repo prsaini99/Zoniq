@@ -7,6 +7,7 @@ import fastapi
 from src.utilities.messages.exceptions.http.exc_details import http_403_forbidden_details
 
 
+# Raise a 403 error when the authenticated user is not authorized to access the resource
 async def http_403_exc_forbidden_request() -> Exception:
     return fastapi.HTTPException(
         status_code=fastapi.status.HTTP_403_FORBIDDEN,
